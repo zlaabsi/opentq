@@ -13,7 +13,17 @@ from typing import Any, Callable
 
 import numpy as np
 from huggingface_hub import hf_hub_download
+from rich.box import HEAVY, ROUNDED, SIMPLE_HEAVY
+from rich.columns import Columns
+from rich.console import Console, Group, RenderableType
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.progress_bar import ProgressBar
 from safetensors import safe_open
+from rich.spinner import Spinner
+from rich.table import Table
+from rich.text import Text
 
 
 ShapeResolver = Callable[[str, str, str], tuple[tuple[int, ...] | None, str | None]]
@@ -121,6 +131,66 @@ def render_table(headers: list[str], rows: list[list[str]]) -> str:
     divider = "  ".join("-" * widths[index] for index in range(len(headers)))
     body = ["  ".join(value.ljust(widths[index]) for index, value in enumerate(row)) for row in rows]
     return "\n".join([header, divider, *body])
+
+
+def progress_ratio(numerator: int | float | None, denominator: int | float | None) -> float:
+    if numerator is None or denominator in (None, 0):
+        return 0.0
+    return max(0.0, min(float(numerator) / float(denominator), 1.0))
+
+
+def state_style(state: str) -> str:
+    return {
+        "running": "cyan",
+        "done": "green",
+        "error": "red",
+    }.get(state, "white")
+
+
+def category_style(category: str | None) -> str:
+    return {
+        "mlp_proj": "magenta",
+        "linear_attn_proj": "cyan",
+        "self_attn_proj": "blue",
+        "embeddings": "yellow",
+        "layernorm": "green",
+        "copy": "green",
+    }.get(category or "", "white")
+
+
+def metric_table(rows: list[tuple[RenderableType, RenderableType]], *, expand: bool = True) -> Table:
+    table = Table.grid(expand=expand, padding=(0, 1))
+    table.add_column(style="bold white")
+    table.add_column(style="white")
+    for label, value in rows:
+        table.add_row(label, value)
+    return table
+
+
+def rich_progress_row(
+    label: str,
+    numerator: int | float | None,
+    denominator: int | float | None,
+    *,
+    color: str,
+    detail: str,
+) -> Table:
+    ratio = progress_ratio(numerator, denominator)
+    bar = ProgressBar(
+        total=100,
+        completed=ratio * 100,
+        width=None,
+        complete_style=color,
+        finished_style=color,
+        pulse_style=f"{color} dim",
+        style="grey27",
+    )
+    table = Table.grid(expand=True, padding=(0, 1))
+    table.add_column(width=10, style="bold white")
+    table.add_column(ratio=1)
+    table.add_column(justify="right", style="white")
+    table.add_row(label, bar, detail)
+    return table
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -481,6 +551,326 @@ def build_monitor_payload(
     }
 
 
+def build_header_renderable(payload: dict[str, Any]) -> Panel:
+    selected_release = payload.get("selected_release") or "-"
+    left = Columns(
+        [
+            Spinner("dots", style="cyan"),
+            Text("OpenTQ Monitor", style="bold white"),
+            Text(selected_release, style="bold cyan"),
+        ],
+        expand=False,
+        padding=(0, 1),
+    )
+    right = Group(
+        Text(payload["root"], style="bright_black", justify="right"),
+        Text(datetime.fromtimestamp(payload["updated_at"]).strftime("%Y-%m-%d %H:%M:%S"), style="bright_black", justify="right"),
+    )
+    grid = Table.grid(expand=True)
+    grid.add_column(ratio=1)
+    grid.add_column(justify="right", width=40)
+    grid.add_row(left, right)
+    return Panel(grid, box=HEAVY, border_style="cyan", padding=(0, 1))
+
+
+def build_release_panel(releases: list[dict[str, Any]], selected_release: str | None) -> Panel:
+    table = Table(box=SIMPLE_HEAVY, expand=True, header_style="bold cyan")
+    table.add_column("release", ratio=2)
+    table.add_column("state", width=9)
+    table.add_column("tensors", width=20)
+    table.add_column("quant", width=11)
+    table.add_column("copy", width=10)
+    table.add_column("values", width=10, justify="right")
+    table.add_column("parts", width=9, justify="right")
+    table.add_column("elapsed", width=10)
+    table.add_column("rate", width=11, justify="right")
+    for release in releases:
+        summary = release["summary"]
+        style = "bold white on rgb(25,35,60)" if release["release"] == selected_release else ""
+        table.add_row(
+            truncate(release["release"], 26),
+            Text(release["state"], style=f"bold {state_style(release['state'])}"),
+            f"{summary['tensors_done']}/{summary['tensors_total']} ({format_percent(summary['tensors_done'], summary['tensors_total'])})",
+            f"{summary['done_quantize']}/{summary['planned_quantize']}",
+            f"{summary['done_copy']}/{summary['planned_copy']}",
+            human_number(summary["values_done"]),
+            human_number(summary["part_files_done"]),
+            human_duration(summary["elapsed_seconds"]),
+            human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-",
+            style=style,
+        )
+    return Panel(table, title="Releases", border_style="cyan", box=ROUNDED, padding=(0, 1))
+
+
+def build_overview_panel(selected: dict[str, Any]) -> Panel:
+    summary = selected["summary"]
+    metrics = metric_table(
+        [
+            ("state", Text(selected["state"], style=f"bold {state_style(selected['state'])}")),
+            ("elapsed", human_duration(summary["elapsed_seconds"])),
+            ("rate", human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-"),
+            ("values", human_number(summary["values_done"])),
+            ("avg mse", format_metric(summary["avg_quant_mse"])),
+            ("max err", format_metric(summary["max_abs_error"])),
+        ]
+    )
+    progress = Group(
+        rich_progress_row(
+            "tensors",
+            summary["tensors_done"],
+            summary["tensors_total"],
+            color="cyan",
+            detail=f"{summary['tensors_done']}/{summary['tensors_total']}",
+        ),
+        rich_progress_row(
+            "quant",
+            summary["done_quantize"],
+            summary["planned_quantize"],
+            color="magenta",
+            detail=f"{summary['done_quantize']}/{summary['planned_quantize']}",
+        ),
+        rich_progress_row(
+            "copy",
+            summary["done_copy"],
+            summary["planned_copy"],
+            color="green",
+            detail=f"{summary['done_copy']}/{summary['planned_copy']}",
+        ),
+    )
+    content = Group(
+        Text(selected["release"], style="bold white"),
+        Text(selected["model_id"], style="bright_black"),
+        Text(""),
+        metrics,
+        Text(""),
+        progress,
+    )
+    return Panel(content, title="Overview", border_style="bright_blue", box=ROUNDED, padding=(0, 1))
+
+
+def build_current_panel(selected: dict[str, Any]) -> Panel:
+    current = selected.get("current")
+    upcoming = selected.get("next")
+    border = category_style(current["category"] if current else upcoming["category"] if upcoming else None)
+
+    if current is None:
+        if upcoming is None:
+            body: RenderableType = Group(
+                Text("No active tensor directory.", style="bold white"),
+                Text("The runner is between tensors or the release is complete.", style="bright_black"),
+            )
+        else:
+            body = Group(
+                Text(compact_tensor_name(upcoming["name"], keep=5), style="bold white"),
+                Text(
+                    f"{upcoming['mode']}  {upcoming.get('variant_name') or '-'}  {upcoming['category']}  {upcoming.get('dtype') or '-'}",
+                    style=f"bold {category_style(upcoming['category'])}",
+                ),
+                Text(f"shape {format_shape(upcoming.get('shape'))}  shard {upcoming.get('source_file') or '-'}", style="bright_black"),
+                Text(""),
+                rich_progress_row("parts", 0, upcoming.get("expected_parts"), color="cyan", detail=f"0/{upcoming.get('expected_parts', '-')}"),
+                rich_progress_row(
+                    "values",
+                    0,
+                    upcoming.get("total_values"),
+                    color="magenta",
+                    detail=f"0/{human_number(upcoming.get('total_values'))}",
+                ),
+                rich_progress_row(
+                    "blocks",
+                    0,
+                    upcoming.get("expected_blocks"),
+                    color="blue",
+                    detail=f"0/{human_number(upcoming.get('expected_blocks'))}",
+                ),
+            )
+        return Panel(body, title="Current Tensor", border_style=border, box=ROUNDED, padding=(0, 1))
+
+    progress_rows: list[RenderableType] = [
+        rich_progress_row(
+            "parts",
+            current["part_count_done"],
+            current.get("expected_parts"),
+            color="cyan",
+            detail=f"{current['part_count_done']} ok / {current['part_count_observed']} seen / {current.get('expected_parts', '-')}",
+        ),
+        rich_progress_row(
+            "values",
+            current["written_values"],
+            current.get("total_values"),
+            color="magenta",
+            detail=f"{human_number(current['written_values'])}/{human_number(current.get('total_values'))}",
+        ),
+    ]
+    if current.get("rows_total") is not None:
+        progress_rows.append(
+            rich_progress_row(
+                "rows",
+                current.get("rows_done"),
+                current["rows_total"],
+                color="green",
+                detail=f"{current.get('rows_done') if current.get('rows_done') is not None else '-'} / {current['rows_total']}",
+            )
+        )
+    if current.get("expected_blocks") is not None:
+        progress_rows.append(
+            rich_progress_row(
+                "blocks",
+                current["written_blocks"],
+                current["expected_blocks"],
+                color="blue",
+                detail=f"{human_number(current['written_blocks'])}/{human_number(current['expected_blocks'])}",
+            )
+        )
+
+    details = metric_table(
+        [
+            ("mode", f"{current.get('mode') or '-'} / {current.get('variant_name') or '-'}"),
+            ("category", Text(current.get("category") or "-", style=f"bold {category_style(current.get('category'))}")),
+            ("shape", format_shape(current.get("shape"))),
+            ("dtype", current.get("dtype") or "-"),
+            ("shard", current.get("source_file") or "-"),
+            ("latest", current.get("latest_part") or "-"),
+            ("range", f"{current.get('latest_row_start')}:{current.get('latest_row_stop')}"),
+            ("chunk", format_shape(current.get("latest_chunk_shape"))),
+            ("bytes", human_bytes(current.get("written_bytes"))),
+            ("groups", f"{human_number(math.ceil(current['written_values'] / current['group_size']))}/{human_number(current['expected_groups'])}" if current.get("expected_groups") is not None else "-"),
+            ("block cfg", f"{current.get('group_size', '-')} / {current.get('block_size', '-')} / {current.get('sub_block_size', '-')}"),
+            ("tensor dir", current.get("tensor_dir") or "-"),
+        ]
+    )
+
+    body = Group(
+        Text(compact_tensor_name(current["name"], keep=5), style="bold white"),
+        Text(datetime.fromtimestamp(current["latest_modified_at"]).strftime("%H:%M:%S") if current.get("latest_modified_at") else "preparing...", style="bright_black"),
+        Text(""),
+        *progress_rows,
+        Text(""),
+        details,
+    )
+    return Panel(body, title="Current Tensor", border_style=border, box=ROUNDED, padding=(0, 1))
+
+
+def build_recent_panel(selected: dict[str, Any]) -> Panel:
+    table = Table(box=SIMPLE_HEAVY, expand=True, header_style="bold cyan")
+    table.add_column("time", width=8)
+    table.add_column("tensor", ratio=3)
+    table.add_column("category", width=18)
+    table.add_column("values", width=10, justify="right")
+    table.add_column("parts", width=7, justify="right")
+    table.add_column("mse", width=10, justify="right")
+    table.add_column("maxerr", width=10, justify="right")
+    recent = selected["recent"]
+    if not recent:
+        table.add_row("-", "No completed tensors yet.", "-", "-", "-", "-", "-")
+    for event in recent:
+        timestamp = "-" if event["completed_at"] is None else datetime.fromtimestamp(event["completed_at"]).strftime("%H:%M:%S")
+        table.add_row(
+            timestamp,
+            truncate(compact_tensor_name(event["name"], keep=4), 44),
+            Text(event["category"], style=f"bold {category_style(event['category'])}"),
+            human_number(event["num_values"]),
+            str(event["part_count"]),
+            format_metric(event["mse"]),
+            format_metric(event["max_abs_error"]),
+        )
+    return Panel(table, title="Recent Timeline", border_style="cyan", box=ROUNDED, padding=(0, 1))
+
+
+def build_category_panel(selected: dict[str, Any]) -> Panel:
+    table = Table(box=SIMPLE_HEAVY, expand=True, header_style="bold cyan")
+    table.add_column("category", ratio=2)
+    table.add_column("tensors", width=8, justify="right")
+    table.add_column("values", width=10, justify="right")
+    table.add_column("quant", width=7, justify="right")
+    table.add_column("copy", width=7, justify="right")
+    table.add_column("avg_mse", width=10, justify="right")
+    table.add_column("maxerr", width=10, justify="right")
+    categories = selected["categories"]
+    if not categories:
+        table.add_row("No category stats yet.", "-", "-", "-", "-", "-", "-")
+    for row in categories:
+        table.add_row(
+            Text(row["category"], style=f"bold {category_style(row['category'])}"),
+            str(row["tensors"]),
+            human_number(row["values"]),
+            str(row["quantized"]),
+            str(row["copied"]),
+            format_metric(row["avg_mse"]),
+            format_metric(row["max_abs_error"]),
+        )
+    return Panel(table, title="By Category", border_style="cyan", box=ROUNDED, padding=(0, 1))
+
+
+def build_footer_renderable() -> Panel:
+    footer = Columns(
+        [
+            Text("ctrl-c", style="bold cyan"),
+            Text("stop watch", style="bright_black"),
+            Text("uv run opentq status", style="bold green"),
+            Text("machine-readable JSON", style="bright_black"),
+        ],
+        expand=True,
+        equal=False,
+        padding=(0, 2),
+    )
+    return Panel(footer, border_style="grey35", box=ROUNDED, padding=(0, 1))
+
+
+def build_monitor_renderable(payload: dict[str, Any], *, width: int | None = None) -> RenderableType:
+    if payload.get("exists") is False:
+        body = Group(
+            Text("No runs found.", style="bold white"),
+            Text(f"root: {payload['root']}", style="bright_black"),
+            Text("Start a quantization batch, then rerun this command.", style="bright_black"),
+        )
+        return Panel(body, title="OpenTQ Monitor", border_style="yellow", box=ROUNDED, padding=(1, 2))
+
+    releases: list[dict[str, Any]] = payload["releases"]
+    if not releases:
+        body = Group(
+            Text("No release directories found.", style="bold white"),
+            Text(f"root: {payload['root']}", style="bright_black"),
+        )
+        return Panel(body, title="OpenTQ Monitor", border_style="yellow", box=ROUNDED, padding=(1, 2))
+
+    selected = next((release for release in releases if release["release"] == payload.get("selected_release")), releases[0])
+
+    if width is None:
+        width = 160
+
+    layout = Layout(name="root")
+    layout.split_column(
+        Layout(build_header_renderable(payload), name="header", size=5),
+        Layout(name="main", ratio=1),
+        Layout(build_footer_renderable(), name="footer", size=3),
+    )
+    if width < 140:
+        layout["main"].split_column(
+            Layout(build_release_panel(releases, payload.get("selected_release")), name="releases", size=10),
+            Layout(build_overview_panel(selected), name="overview", size=13),
+            Layout(build_current_panel(selected), name="current", size=18),
+            Layout(build_recent_panel(selected), name="recent", size=14),
+            Layout(build_category_panel(selected), name="categories", ratio=1),
+        )
+        return layout
+
+    layout["main"].split_row(
+        Layout(name="left", ratio=5),
+        Layout(name="right", ratio=6),
+    )
+    layout["left"].split_column(
+        Layout(build_release_panel(releases, payload.get("selected_release")), name="releases", size=10),
+        Layout(build_overview_panel(selected), name="overview", size=13),
+        Layout(build_current_panel(selected), name="current", ratio=1),
+    )
+    layout["right"].split_column(
+        Layout(build_recent_panel(selected), name="recent", ratio=3),
+        Layout(build_category_panel(selected), name="categories", ratio=2),
+    )
+    return layout
+
+
 def render_monitor(payload: dict[str, Any]) -> str:
     if payload.get("exists") is False:
         return f"OpenTQ Monitor\n\nNo runs found under {payload['root']}.\nStart a quantization batch, then rerun this command."
@@ -639,15 +1029,24 @@ def render_monitor(payload: dict[str, Any]) -> str:
 
 
 def print_monitor(payload: dict[str, Any], clear: bool = False) -> None:
-    if clear and sys.stdout.isatty():
-        print("\033[2J\033[H", end="")
-    print(render_monitor(payload), flush=True)
+    console = Console()
+    if clear and console.is_terminal:
+        console.clear()
+    console.print(build_monitor_renderable(payload, width=console.size.width))
 
 
 def watch_monitor(root: str | Path = "artifacts/qwen3.6-27b", interval: float = 5.0) -> int:
+    console = Console()
     try:
-        while True:
-            print_monitor(build_monitor_payload(root), clear=True)
-            time.sleep(interval)
+        with Live(
+            build_monitor_renderable(build_monitor_payload(root), width=console.size.width),
+            console=console,
+            screen=True,
+            auto_refresh=True,
+            refresh_per_second=8,
+        ) as live:
+            while True:
+                live.update(build_monitor_renderable(build_monitor_payload(root), width=console.size.width), refresh=True)
+                time.sleep(interval)
     except KeyboardInterrupt:
         return 130

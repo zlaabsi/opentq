@@ -77,6 +77,8 @@ uv run opentq monitor
 uv run opentq monitor --watch
 ```
 
+`opentq monitor --watch` uses a full-screen Rich TUI with colored panels, live progress bars, current-tensor inspection, recent timeline, and category aggregates.
+
 ## Repo layout
 
 ```text
