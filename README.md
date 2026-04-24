@@ -71,6 +71,8 @@ For unattended overnight runs on Apple Silicon, launch the resumable Qwen3.6-27B
 ```bash
 ./scripts/launch_qwen36_quantizations.sh
 python ./scripts/status_qwen36_quantizations.py
+uv run opentq status
+uv run opentq status --watch
 ```
 
 ## Repo layout

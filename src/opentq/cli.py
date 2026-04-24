@@ -11,6 +11,7 @@ from .inventory import build_inventory, inventory_summary
 from .quantize import quantize_tensor
 from .recipes import get_recipe, recipe_markdown, recipe_to_dict
 from .run import build_release_plan, quantize_release
+from .status import build_status_payload, print_status, watch_status
 from .variants import VARIANTS, get_variant
 
 
@@ -53,6 +54,11 @@ def build_parser() -> argparse.ArgumentParser:
     quantize_release_parser.add_argument("--language-only", action="store_true")
     quantize_release_parser.add_argument("--vision-only", action="store_true")
     quantize_release_parser.add_argument("--no-skip-existing", action="store_true")
+
+    status = sub.add_parser("status", help="Inspect or watch the overnight Qwen3.6-27B quantization batch.")
+    status.add_argument("--root", default="artifacts/qwen3.6-27b")
+    status.add_argument("--watch", action="store_true")
+    status.add_argument("--interval", type=float, default=10.0)
 
     return parser
 
@@ -179,6 +185,13 @@ def cmd_quantize_release(
     return 0
 
 
+def cmd_status(root: str, watch: bool, interval: float) -> int:
+    if watch:
+        return watch_status(root=root, interval=interval)
+    print_status(build_status_payload(root))
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -206,6 +219,8 @@ def main() -> int:
             args.vision_only,
             args.no_skip_existing,
         )
+    if args.command == "status":
+        return cmd_status(args.root, args.watch, args.interval)
     parser.error(f"unknown command: {args.command}")
     return 2
 
