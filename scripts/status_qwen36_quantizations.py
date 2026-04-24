@@ -12,6 +12,20 @@ def progress_lines(path: Path) -> int:
         return sum(1 for _ in handle)
 
 
+def count_parts(root: Path) -> int:
+    tensors_root = root / "tensors"
+    if not tensors_root.exists():
+        return 0
+    return sum(1 for _ in tensors_root.rglob("part-*"))
+
+
+def count_tensor_dirs(root: Path) -> int:
+    tensors_root = root / "tensors"
+    if not tensors_root.exists():
+        return 0
+    return sum(1 for child in tensors_root.iterdir() if child.is_dir())
+
+
 def main() -> int:
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("artifacts/qwen3.6-27b")
     if not root.exists():
@@ -41,6 +55,8 @@ def main() -> int:
                 "release": child.name,
                 "state": "running",
                 "processed_tensors": progress_lines(progress_path),
+                "active_tensor_dirs": count_tensor_dirs(child),
+                "written_part_files": count_parts(child),
             }
         )
 
