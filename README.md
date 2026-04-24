@@ -40,7 +40,7 @@ This initial commit gives you:
   - Gaussian Lloyd-Max codebook generation
   - fast Walsh-Hadamard rotation
   - block quantization and residual quantization for `.npy` tensors
-  - a CLI to inspect variants, estimate size, quantize demo tensors, inspect a Hugging Face safetensors index, and print a model release matrix
+  - a CLI to inspect variants, estimate size, quantize demo tensors, inspect a Hugging Face safetensors index, print a model release matrix, and run a full release quantization over HF safetensors
 - architecture docs for:
   - the `llama.cpp` path
   - the Apple Silicon runtime path
@@ -62,6 +62,15 @@ uv run opentq plan TQ4R2 --shape 8192 8192
 uv run opentq quantize weights.npy --variant TQ3_SB4 --output artifacts/q_proj
 uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
+uv run opentq release-plan --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_SB4
+uv run opentq quantize-release --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_SB4 --output artifacts/qwen36-tq4sb4 --max-tensors 8
+```
+
+For unattended overnight runs on Apple Silicon, launch the resumable Qwen3.6-27B batch with:
+
+```bash
+./scripts/launch_qwen36_quantizations.sh
+python ./scripts/status_qwen36_quantizations.py
 ```
 
 ## Repo layout

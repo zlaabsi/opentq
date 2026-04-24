@@ -16,6 +16,12 @@ def classify_qwen36_27b_tensor(name: str) -> str:
         return "lm_head"
     if name == "model.language_model.embed_tokens.weight":
         return "embeddings"
+    if name == "model.visual.pos_embed.weight":
+        return "visual_pos_embed"
+    if name == "mtp.fc.weight":
+        return "mtp_proj"
+    if name.startswith("mtp.pre_fc_norm_") and name.endswith(".weight"):
+        return "mtp_norm"
     if name.startswith("model.visual.patch_embed."):
         return "visual_patch_embed"
     if name.startswith("model.visual.merger."):

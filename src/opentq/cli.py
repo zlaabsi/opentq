@@ -10,6 +10,7 @@ from .hf import base_weight_size_gib, fetch_safetensors_index
 from .inventory import build_inventory, inventory_summary
 from .quantize import quantize_tensor
 from .recipes import get_recipe, recipe_markdown, recipe_to_dict
+from .run import build_release_plan, quantize_release
 from .variants import VARIANTS, get_variant
 
 
@@ -36,6 +37,22 @@ def build_parser() -> argparse.ArgumentParser:
     inventory = sub.add_parser("inventory", help="Inspect the safetensors index of a Hugging Face model.")
     inventory.add_argument("--model-id", default="Qwen/Qwen3.6-27B")
     inventory.add_argument("--sample-limit", type=int, default=3)
+
+    release_plan = sub.add_parser("release-plan", help="Build the tensor-level plan for a model release.")
+    release_plan.add_argument("--recipe", required=True)
+    release_plan.add_argument("--release", required=True)
+    release_plan.add_argument("--language-only", action="store_true")
+    release_plan.add_argument("--vision-only", action="store_true")
+
+    quantize_release_parser = sub.add_parser("quantize-release", help="Run a full HF safetensors -> OpenTQ quantization.")
+    quantize_release_parser.add_argument("--recipe", required=True)
+    quantize_release_parser.add_argument("--release", required=True)
+    quantize_release_parser.add_argument("--output", required=True)
+    quantize_release_parser.add_argument("--max-tensors", type=int)
+    quantize_release_parser.add_argument("--only-shard")
+    quantize_release_parser.add_argument("--language-only", action="store_true")
+    quantize_release_parser.add_argument("--vision-only", action="store_true")
+    quantize_release_parser.add_argument("--no-skip-existing", action="store_true")
 
     return parser
 
@@ -80,14 +97,14 @@ def cmd_quantize(tensor_path: str, variant_name: str, output: str, seed: int) ->
 
     output_path = Path(output)
     output_path.mkdir(parents=True, exist_ok=True)
-    np.save(output_path / "reconstruction.npy", result.reconstruction)
+    if result.reconstruction is not None:
+        np.save(output_path / "reconstruction.npy", result.reconstruction)
     np.savez_compressed(
         output_path / "quantized_blocks.npz",
-        indices=np.stack([block.indices for block in result.packed.blocks]),
-        scales=np.stack([block.scales for block in result.packed.blocks]),
-        residual_indices=np.stack([block.residual_indices for block in result.packed.blocks if block.residual_indices is not None])
-        if any(block.residual_indices is not None for block in result.packed.blocks)
-        else np.array([], dtype=np.uint8),
+        indices=result.packed.indices,
+        scales=result.packed.scales,
+        residual_indices=result.packed.residual_indices if result.packed.residual_indices is not None else np.array([], dtype=np.uint8),
+        residual_scales=result.packed.residual_scales if result.packed.residual_scales is not None else np.array([], dtype=np.float32),
     )
     manifest_path = output_path / "manifest.json"
     manifest_path.write_text(json.dumps(result.to_manifest(), indent=2) + "\n", encoding="utf-8")
@@ -127,6 +144,41 @@ def cmd_inventory(model_id: str, sample_limit: int) -> int:
     return 0
 
 
+def cmd_release_plan(recipe_key: str, release_slug: str, language_only: bool, vision_only: bool) -> int:
+    payload = build_release_plan(
+        recipe_key,
+        release_slug,
+        include_vision=not language_only,
+        include_language=not vision_only,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def cmd_quantize_release(
+    recipe_key: str,
+    release_slug: str,
+    output: str,
+    max_tensors: int | None,
+    only_shard: str | None,
+    language_only: bool,
+    vision_only: bool,
+    no_skip_existing: bool,
+) -> int:
+    payload = quantize_release(
+        recipe_key,
+        release_slug,
+        output,
+        include_vision=not language_only,
+        include_language=not vision_only,
+        max_tensors=max_tensors,
+        only_shard=only_shard,
+        skip_existing=not no_skip_existing,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -141,6 +193,19 @@ def main() -> int:
         return cmd_recipe(args.key, args.format)
     if args.command == "inventory":
         return cmd_inventory(args.model_id, args.sample_limit)
+    if args.command == "release-plan":
+        return cmd_release_plan(args.recipe, args.release, args.language_only, args.vision_only)
+    if args.command == "quantize-release":
+        return cmd_quantize_release(
+            args.recipe,
+            args.release,
+            args.output,
+            args.max_tensors,
+            args.only_shard,
+            args.language_only,
+            args.vision_only,
+            args.no_skip_existing,
+        )
     parser.error(f"unknown command: {args.command}")
     return 2
 

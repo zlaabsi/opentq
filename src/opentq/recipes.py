@@ -220,6 +220,14 @@ def get_recipe(key: str) -> ModelRecipe:
         raise KeyError(f"unknown recipe {key!r}; available: {available}") from exc
 
 
+def get_release(recipe: ModelRecipe, slug: str) -> ReleaseArtifact:
+    for release in recipe.releases:
+        if release.slug.lower() == slug.lower():
+            return release
+    available = ", ".join(release.slug for release in recipe.releases)
+    raise KeyError(f"unknown release {slug!r}; available: {available}")
+
+
 def recipe_to_dict(recipe: ModelRecipe) -> dict[str, object]:
     return {
         "key": recipe.key,

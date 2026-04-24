@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+from functools import lru_cache
 
 import numpy as np
 
 from .codebooks import lloyd_max_gaussian
-from .hadamard import hadamard_rotate
-from .packing import PackedBlock, PackedTensor
+from .hadamard import hadamard_rotate_groups, hadamard_unrotate_groups
+from .packing import PackedTensor
 from .variants import QuantVariant
 
 
 @dataclass
 class QuantizeResult:
     packed: PackedTensor
-    reconstruction: np.ndarray
+    reconstruction: np.ndarray | None
 
     def to_manifest(self) -> dict[str, object]:
         return {
@@ -21,85 +22,81 @@ class QuantizeResult:
             "variant": self.packed.variant,
             "mse": self.packed.mse,
             "max_abs_error": self.packed.max_abs_error,
-            "num_blocks": len(self.packed.blocks),
+            "num_blocks": self.packed.num_blocks,
+            "sum_squared_error": self.packed.sum_squared_error,
         }
 
 
-def nearest_codebook_index(values: np.ndarray, codebook: np.ndarray) -> np.ndarray:
-    distances = np.abs(values[:, None] - codebook[None, :])
-    return np.argmin(distances, axis=1).astype(np.uint8)
+@lru_cache(maxsize=16)
+def gaussian_quantizer(bits: int) -> tuple[np.ndarray, np.ndarray]:
+    return lloyd_max_gaussian(bits)
 
 
-def quantize_sub_block(values: np.ndarray, bits: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    codebook, _ = lloyd_max_gaussian(bits)
+def quantize_sub_blocks(values: np.ndarray, bits: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    codebook, boundaries = gaussian_quantizer(bits)
     max_level = float(np.max(np.abs(codebook)))
-    scale = max(np.max(np.abs(values)) / max_level, 1e-8)
-    normalized = values / scale
-    indices = nearest_codebook_index(normalized.astype(np.float32), codebook)
-    reconstructed = codebook[indices] * scale
-    return indices, reconstructed.astype(np.float32), np.array([scale], dtype=np.float32)
+    sub_blocks = np.asarray(values, dtype=np.float32)
+    scales = np.maximum(np.max(np.abs(sub_blocks), axis=-1, keepdims=True) / max_level, 1e-8).astype(np.float32)
+    normalized = sub_blocks / scales
+    indices = np.searchsorted(boundaries[1:-1], normalized, side="right").astype(np.uint8)
+    reconstructed = codebook[indices] * scales
+    return indices, reconstructed.astype(np.float32), scales.astype(np.float32)
 
 
-def quantize_block(block: np.ndarray, variant: QuantVariant, seed: int) -> tuple[PackedBlock, np.ndarray]:
-    work = np.asarray(block, dtype=np.float32).copy()
+def quantize_tensor(tensor: np.ndarray, variant: QuantVariant, seed: int = 42, return_reconstruction: bool = True) -> QuantizeResult:
+    source = np.asarray(tensor, dtype=np.float32)
+    flat = source.reshape(-1)
+    padded_size = ((flat.size + variant.group_size - 1) // variant.group_size) * variant.group_size
+    padded = np.zeros(padded_size, dtype=np.float32)
+    padded[: flat.size] = flat
+
+    groups = padded.reshape(-1, variant.group_size)
+    group_count = groups.shape[0]
+    blocks_per_group = variant.group_size // variant.block_size
+    sub_blocks_per_block = variant.block_size // variant.sub_block_size
+    seeds = seed + (np.arange(group_count, dtype=np.uint64) * np.uint64(variant.group_size))
+
     if variant.use_wht:
-        work, _ = hadamard_rotate(work, seed)
+        rotated_groups = hadamard_rotate_groups(groups, seeds)
+    else:
+        rotated_groups = groups.copy()
 
-    sub_blocks = []
-    recon_parts = []
-    scales = []
+    sub_blocks = rotated_groups.reshape(group_count, blocks_per_group, sub_blocks_per_block, variant.sub_block_size)
+    primary_indices, primary_reconstruction, primary_scales = quantize_sub_blocks(sub_blocks, variant.weight_bits)
+    rotated_reconstruction = primary_reconstruction.reshape(group_count, variant.group_size)
 
-    for start in range(0, work.size, variant.sub_block_size):
-        sub = work[start : start + variant.sub_block_size]
-        idx, recon, scale = quantize_sub_block(sub, variant.weight_bits)
-        sub_blocks.append(idx)
-        recon_parts.append(recon)
-        scales.append(scale)
-
-    primary_indices = np.concatenate(sub_blocks).astype(np.uint8)
-    reconstruction = np.concatenate(recon_parts).astype(np.float32)
-    packed = PackedBlock(indices=primary_indices, scales=np.concatenate(scales).astype(np.float32))
-
+    residual_indices = None
+    residual_scales = None
     if variant.residual_bits is not None:
-        residual = work - reconstruction
-        residual_parts = []
-        residual_indices_parts = []
-        for start in range(0, residual.size, variant.sub_block_size):
-            sub = residual[start : start + variant.sub_block_size]
-            idx, recon, _ = quantize_sub_block(sub, variant.residual_bits)
-            residual_indices_parts.append(idx)
-            residual_parts.append(recon)
-        residual_reconstruction = np.concatenate(residual_parts).astype(np.float32)
-        reconstruction = reconstruction + residual_reconstruction
-        packed.residual_indices = np.concatenate(residual_indices_parts).astype(np.uint8)
+        residual = sub_blocks - primary_reconstruction
+        residual_indices_raw, residual_reconstruction, residual_scales_raw = quantize_sub_blocks(residual, variant.residual_bits)
+        residual_indices = residual_indices_raw.reshape(-1, variant.block_size)
+        residual_scales = residual_scales_raw.reshape(-1, sub_blocks_per_block)
+        rotated_reconstruction = rotated_reconstruction + residual_reconstruction.reshape(group_count, variant.group_size)
 
-    return packed, reconstruction
+    if variant.use_wht:
+        reconstructed_groups = hadamard_unrotate_groups(rotated_reconstruction, seeds)
+    else:
+        reconstructed_groups = rotated_reconstruction
 
+    valid_reconstruction = reconstructed_groups.reshape(-1)[: flat.size]
+    diff = flat - valid_reconstruction
+    total_sse = float(np.sum(diff * diff))
+    max_abs_error = 0.0 if diff.size == 0 else float(np.max(np.abs(diff)))
+    reconstruction = None if not return_reconstruction else valid_reconstruction.reshape(source.shape)
 
-def quantize_tensor(tensor: np.ndarray, variant: QuantVariant, seed: int = 42) -> QuantizeResult:
-    array = np.asarray(tensor, dtype=np.float32)
-    flat = array.reshape(-1)
-    blocks = []
-    reconstruction = np.zeros_like(flat)
-
-    for offset in range(0, flat.size, variant.block_size):
-        block = flat[offset : offset + variant.block_size]
-        if block.size < variant.block_size:
-            padded = np.zeros(variant.block_size, dtype=np.float32)
-            padded[: block.size] = block
-            block = padded
-        packed_block, recon_block = quantize_block(block, variant, seed + offset)
-        blocks.append(packed_block)
-        reconstruction[offset : offset + min(variant.block_size, flat.size - offset)] = recon_block[: min(variant.block_size, flat.size - offset)]
-
-    mse = float(np.mean((flat - reconstruction) ** 2))
-    max_abs_error = float(np.max(np.abs(flat - reconstruction)))
+    indices = primary_indices.reshape(-1, variant.block_size)
+    scales = primary_scales.reshape(-1, sub_blocks_per_block)
+    mse = float(total_sse / max(flat.size, 1))
     packed_tensor = PackedTensor(
-        shape=array.shape,
+        shape=source.shape,
         variant=variant.name,
-        blocks=blocks,
+        indices=indices,
+        scales=scales,
+        residual_indices=residual_indices,
+        residual_scales=residual_scales,
         mse=mse,
         max_abs_error=max_abs_error,
+        sum_squared_error=float(total_sse),
     )
-    return QuantizeResult(packed=packed_tensor, reconstruction=reconstruction.reshape(array.shape))
-
+    return QuantizeResult(packed=packed_tensor, reconstruction=reconstruction)

@@ -5,6 +5,8 @@ from typing import Any
 from urllib.parse import quote
 from urllib.request import urlopen
 
+from huggingface_hub import hf_hub_download
+
 
 def hf_resolve_url(model_id: str, filename: str, revision: str = "main") -> str:
     quoted_model = quote(model_id, safe="/")
@@ -25,3 +27,6 @@ def base_weight_size_gib(index_data: dict[str, Any]) -> float:
     total_size = float(index_data.get("metadata", {}).get("total_size", 0.0))
     return total_size / (1024.0**3)
 
+
+def download_hf_file(model_id: str, filename: str) -> str:
+    return hf_hub_download(repo_id=model_id, filename=filename)
