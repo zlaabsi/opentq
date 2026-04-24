@@ -1,8 +1,9 @@
 from pathlib import Path
+import zlib
 
 import numpy as np
 
-from opentq.monitor import build_monitor_payload, render_monitor
+from opentq.monitor import build_monitor_payload, render_monitor, summarize_active_parts
 
 
 def test_build_monitor_payload_for_running_release(tmp_path: Path) -> None:
@@ -66,3 +67,32 @@ def test_build_monitor_payload_for_running_release(tmp_path: Path) -> None:
 def test_render_monitor_empty_state(tmp_path: Path) -> None:
     text = render_monitor(build_monitor_payload(tmp_path / "missing"))
     assert "No runs found" in text
+
+
+def test_summarize_active_parts_ignores_transient_zlib_errors(tmp_path: Path, monkeypatch) -> None:
+    good = tmp_path / "part-00000.npz"
+    bad = tmp_path / "part-00001.npz"
+    np.savez_compressed(
+        good,
+        indices=np.zeros((2, 32), dtype=np.uint8),
+        scales=np.zeros((2, 4), dtype=np.float32),
+        shape=np.array([2, 4], dtype=np.int64),
+        row_start=np.array([0], dtype=np.int64),
+        row_stop=np.array([2], dtype=np.int64),
+    )
+    bad.write_bytes(b"not-a-real-npz")
+
+    real_np_load = np.load
+
+    def flaky_np_load(path: Path, *args: object, **kwargs: object):
+        if Path(path) == bad:
+            raise zlib.error("invalid block type")
+        return real_np_load(path, *args, **kwargs)
+
+    monkeypatch.setattr(np, "load", flaky_np_load)
+
+    summary = summarize_active_parts([good, bad], mode="quantize")
+    assert summary["observed_part_count"] == 2
+    assert summary["readable_part_count"] == 1
+    assert summary["written_values"] == 8
+    assert summary["written_blocks"] == 2

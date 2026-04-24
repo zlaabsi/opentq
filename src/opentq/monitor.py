@@ -5,6 +5,7 @@ import math
 import sys
 import time
 import zipfile
+import zlib
 from collections import defaultdict
 from datetime import datetime
 from functools import lru_cache
@@ -273,7 +274,11 @@ def summarize_active_parts(part_paths: list[Path], mode: str) -> dict[str, Any]:
     }
     latest_loaded_path: Path | None = None
     for path in sorted(part_paths):
-        summary["written_bytes"] += path.stat().st_size
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        summary["written_bytes"] += stat.st_size
         try:
             with np.load(path) as payload:
                 summary["readable_part_count"] += 1
@@ -281,14 +286,14 @@ def summarize_active_parts(part_paths: list[Path], mode: str) -> dict[str, Any]:
                 summary["written_values"] += product(chunk_shape)
                 if mode == "quantize" and "indices" in payload.files:
                     summary["written_blocks"] += int(payload["indices"].shape[0])
-                if latest_loaded_path is None or path.stat().st_mtime >= latest_loaded_path.stat().st_mtime:
+                if latest_loaded_path is None or stat.st_mtime >= latest_loaded_path.stat().st_mtime:
                     latest_loaded_path = path
                     summary["latest_part"] = path.name
-                    summary["latest_modified_at"] = path.stat().st_mtime
+                    summary["latest_modified_at"] = stat.st_mtime
                     summary["latest_chunk_shape"] = chunk_shape
                     summary["latest_row_start"] = int(payload["row_start"][0]) if "row_start" in payload.files else None
                     summary["latest_row_stop"] = int(payload["row_stop"][0]) if "row_stop" in payload.files else None
-        except (EOFError, ValueError, OSError, zipfile.BadZipFile):
+        except (EOFError, ValueError, OSError, zipfile.BadZipFile, zlib.error):
             continue
     return summary
 
