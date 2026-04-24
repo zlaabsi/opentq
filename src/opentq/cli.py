@@ -6,7 +6,10 @@ from pathlib import Path
 
 import numpy as np
 
+from .hf import base_weight_size_gib, fetch_safetensors_index
+from .inventory import build_inventory, inventory_summary
 from .quantize import quantize_tensor
+from .recipes import get_recipe, recipe_markdown, recipe_to_dict
 from .variants import VARIANTS, get_variant
 
 
@@ -25,6 +28,14 @@ def build_parser() -> argparse.ArgumentParser:
     quantize.add_argument("--variant", required=True)
     quantize.add_argument("--output", required=True)
     quantize.add_argument("--seed", type=int, default=42)
+
+    recipe = sub.add_parser("recipe", help="Show the release matrix and work phases for a model recipe.")
+    recipe.add_argument("key")
+    recipe.add_argument("--format", choices=("json", "markdown"), default="json")
+
+    inventory = sub.add_parser("inventory", help="Inspect the safetensors index of a Hugging Face model.")
+    inventory.add_argument("--model-id", default="Qwen/Qwen3.6-27B")
+    inventory.add_argument("--sample-limit", type=int, default=3)
 
     return parser
 
@@ -84,6 +95,38 @@ def cmd_quantize(tensor_path: str, variant_name: str, output: str, seed: int) ->
     return 0
 
 
+def cmd_recipe(key: str, output_format: str) -> int:
+    recipe = get_recipe(key)
+    if output_format == "json":
+        print(json.dumps(recipe_to_dict(recipe), indent=2))
+        return 0
+    if output_format == "markdown":
+        print(recipe_markdown(recipe))
+        return 0
+    raise ValueError(f"unsupported format: {output_format}")
+
+
+def cmd_inventory(model_id: str, sample_limit: int) -> int:
+    index_data = fetch_safetensors_index(model_id)
+    weight_map = index_data["weight_map"]
+    payload = {
+        "model_id": model_id,
+        "base_weight_size_gib": round(base_weight_size_gib(index_data), 2),
+        "num_tensors": len(weight_map),
+        "summary": inventory_summary(weight_map),
+        "inventory": [
+            {
+                "category": row.category,
+                "count": row.count,
+                "samples": list(row.samples),
+            }
+            for row in build_inventory(weight_map, sample_limit=sample_limit)
+        ],
+    }
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -94,10 +137,13 @@ def main() -> int:
         return cmd_plan(args.variant, args.shape)
     if args.command == "quantize":
         return cmd_quantize(args.tensor, args.variant, args.output, args.seed)
+    if args.command == "recipe":
+        return cmd_recipe(args.key, args.format)
+    if args.command == "inventory":
+        return cmd_inventory(args.model_id, args.sample_limit)
     parser.error(f"unknown command: {args.command}")
     return 2
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

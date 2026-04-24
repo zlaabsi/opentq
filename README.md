@@ -27,6 +27,7 @@ The public `TQ3_4S` ecosystem proves that low-bit WHT-rotated weight formats can
 | `TQ4_SB4` | daily driver | 4-bit WHT with four sub-block scales |
 | `TQ4R2` | quality-first 6-bit total | 4+2 residual quantization |
 | `TQ4R4` | near-lossless 8-bit total | 4+4 residual quantization |
+| `TQ_BAL_DENSE` | dense-hybrid mixed profile | model-aware release recipe for Qwen3.6-27B-class dense models |
 | `TQ_MIX_MOE` | MoE-aware release profile | tensor-role-aware mixed precision |
 
 `SB4` means "4 sub-block scales per block". The naming is deliberate: it describes the format instead of inheriting an opaque revision suffix.
@@ -39,7 +40,7 @@ This initial commit gives you:
   - Gaussian Lloyd-Max codebook generation
   - fast Walsh-Hadamard rotation
   - block quantization and residual quantization for `.npy` tensors
-  - a CLI to inspect variants, estimate size, and quantize demo tensors
+  - a CLI to inspect variants, estimate size, quantize demo tensors, inspect a Hugging Face safetensors index, and print a model release matrix
 - architecture docs for:
   - the `llama.cpp` path
   - the Apple Silicon runtime path
@@ -59,6 +60,8 @@ uv sync
 uv run opentq variants
 uv run opentq plan TQ4R2 --shape 8192 8192
 uv run opentq quantize weights.npy --variant TQ3_SB4 --output artifacts/q_proj
+uv run opentq recipe qwen3.6-27b --format markdown
+uv run opentq inventory --model-id Qwen/Qwen3.6-27B
 ```
 
 ## Repo layout
@@ -76,4 +79,3 @@ patches/llama.cpp/   planned upstream integration notes and patch strategy
 2. emit GGUF custom tensor payloads for `llama.cpp`
 3. land Metal decode kernels for `TQ3_SB4`, `TQ4_SB4`, and `TQ4R2`
 4. benchmark on M1 Max, M2 Max, M3 Max, and M4 Max with long-context agentic prompts
-
