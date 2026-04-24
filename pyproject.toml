@@ -20,10 +20,7 @@ dependencies = [
 opentq = "opentq.cli:main"
 
 [tool.hatch.build.targets.wheel]
-only-include = ["src/opentq"]
-
-[tool.hatch.build.targets.wheel.sources]
-"src" = ""
+packages = ["src/opentq"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
