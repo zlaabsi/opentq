@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 
 OUTPUT_ROOT="${1:-artifacts/qwen3.6-27b}"
 mkdir -p "$OUTPUT_ROOT/logs"
@@ -31,7 +32,7 @@ for release in "${RELEASES[@]}"; do
   fi
 
   echo "[$(timestamp)] start $release" | tee -a "$log_path"
-  PYTHONUNBUFFERED=1 uv run opentq quantize-release \
+  PYTHONUNBUFFERED=1 uv run python -m opentq.cli quantize-release \
     --recipe qwen3.6-27b \
     --release "$release" \
     --output "$release_dir" \
