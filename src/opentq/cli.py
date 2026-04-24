@@ -8,6 +8,7 @@ import numpy as np
 
 from .hf import base_weight_size_gib, fetch_safetensors_index
 from .inventory import build_inventory, inventory_summary
+from .monitor import build_monitor_payload, print_monitor, watch_monitor
 from .quantize import quantize_tensor
 from .recipes import get_recipe, recipe_markdown, recipe_to_dict
 from .run import build_release_plan, quantize_release
@@ -59,6 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--root", default="artifacts/qwen3.6-27b")
     status.add_argument("--watch", action="store_true")
     status.add_argument("--interval", type=float, default=10.0)
+
+    monitor = sub.add_parser("monitor", help="Render a dense terminal monitor for the active quantization run.")
+    monitor.add_argument("--root", default="artifacts/qwen3.6-27b")
+    monitor.add_argument("--watch", action="store_true")
+    monitor.add_argument("--interval", type=float, default=5.0)
 
     return parser
 
@@ -192,6 +198,13 @@ def cmd_status(root: str, watch: bool, interval: float) -> int:
     return 0
 
 
+def cmd_monitor(root: str, watch: bool, interval: float) -> int:
+    if watch:
+        return watch_monitor(root=root, interval=interval)
+    print_monitor(build_monitor_payload(root))
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -221,6 +234,8 @@ def main() -> int:
         )
     if args.command == "status":
         return cmd_status(args.root, args.watch, args.interval)
+    if args.command == "monitor":
+        return cmd_monitor(args.root, args.watch, args.interval)
     parser.error(f"unknown command: {args.command}")
     return 2
 

@@ -25,7 +25,7 @@ def count_tensor_dirs(root: Path) -> int:
     tensors_root = root / "tensors"
     if not tensors_root.exists():
         return 0
-    return sum(1 for child in tensors_root.iterdir() if child.is_dir())
+    return sum(1 for child in tensors_root.iterdir() if child.is_dir() and not (child / "meta.json").exists())
 
 
 def build_status_payload(root: str | Path = "artifacts/qwen3.6-27b") -> dict[str, Any]:
