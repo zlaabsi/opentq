@@ -187,7 +187,7 @@ def rich_progress_row(
         style="grey27",
     )
     table = Table.grid(expand=True, padding=(0, 1))
-    table.add_column(width=10, style="bold white")
+    table.add_column(width=14, style="bold white")
     table.add_column(ratio=1)
     table.add_column(justify="right", style="white")
     table.add_row(label, bar, detail)
@@ -210,6 +210,25 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def dtype_bytes(dtype: str | None) -> int:
+    normalized = (dtype or "bf16").lower()
+    if normalized in {"bf16", "bfloat16", "float16", "f16", "half"}:
+        return 2
+    if normalized in {"float32", "f32"}:
+        return 4
+    if normalized in {"float64", "f64"}:
+        return 8
+    if normalized in {"int8", "uint8", "bool"}:
+        return 1
+    if normalized in {"int16", "uint16"}:
+        return 2
+    if normalized in {"int32", "uint32"}:
+        return 4
+    if normalized in {"int64", "uint64"}:
+        return 8
+    return 2
+
+
 def parse_release_start(log_path: Path) -> float | None:
     if not log_path.exists():
         return None
@@ -222,6 +241,77 @@ def parse_release_start(log_path: Path) -> float | None:
         return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").timestamp()
     except ValueError:
         return None
+
+
+def build_tensor_inventory(release_dirs: list[Path]) -> dict[str, dict[str, Any]]:
+    inventory: dict[str, dict[str, Any]] = {}
+    for release_dir in release_dirs:
+        for row in load_jsonl(release_dir / "progress.jsonl"):
+            name = row.get("name")
+            if not name or name in inventory:
+                continue
+            shape = tuple(int(dim) for dim in row.get("shape", []))
+            inventory[name] = {
+                "shape": shape,
+                "dtype": row.get("dtype"),
+                "num_values": int(row["num_values"]),
+            }
+    return inventory
+
+
+def estimate_quantized_tensor_bytes(num_values: int, weight_bits: int, residual_bits: int, group_size: int, block_size: int, sub_block_size: int) -> int:
+    if num_values <= 0:
+        return 0
+    padded_values = math.ceil(num_values / group_size) * group_size
+    blocks = padded_values // block_size
+    sub_block_scales = block_size // sub_block_size
+    total_bits = padded_values * (weight_bits + residual_bits) + (blocks * sub_block_scales * 16)
+    return math.ceil(total_bits / 8)
+
+
+def estimate_row_artifact_bytes(
+    row: dict[str, Any],
+    model_id: str,
+    tensor_inventory: dict[str, dict[str, Any]],
+    shape_resolver: ShapeResolver,
+) -> int | None:
+    name = row["name"]
+    shape: tuple[int, ...] | None = None
+    dtype: str | None = None
+    num_values: int | None = None
+
+    cached = tensor_inventory.get(name)
+    if cached is not None:
+        shape = tuple(int(dim) for dim in cached["shape"])
+        dtype = cached.get("dtype")
+        num_values = int(cached["num_values"])
+    else:
+        shape, dtype = shape_resolver(model_id, row["source_file"], name)
+        if shape is None:
+            return None
+        num_values = product(shape)
+        tensor_inventory[name] = {
+            "shape": shape,
+            "dtype": dtype,
+            "num_values": num_values,
+        }
+
+    if row["mode"] == "copy":
+        return num_values * dtype_bytes(dtype)
+    if row["mode"] != "quantize" or not row.get("variant_name"):
+        return 0
+
+    from .variants import get_variant
+
+    variant = get_variant(row["variant_name"])
+    return estimate_quantized_tensor_bytes(
+        num_values=num_values,
+        weight_bits=variant.weight_bits,
+        residual_bits=variant.residual_bits or 0,
+        group_size=variant.group_size,
+        block_size=variant.block_size,
+        sub_block_size=variant.sub_block_size,
+    )
 
 
 @lru_cache(maxsize=512)
@@ -462,6 +552,7 @@ def build_next_tensor_summary(
 
 def build_release_monitor(
     release_dir: Path,
+    tensor_inventory: dict[str, dict[str, Any]],
     shape_resolver: ShapeResolver = resolve_tensor_metadata,
     now: float | None = None,
 ) -> dict[str, Any]:
@@ -487,6 +578,16 @@ def build_release_monitor(
     quant_entries = [entry for entry in entries if entry["mode"] == "quantize" and entry.get("sum_squared_error") is not None]
     total_sse = sum(float(entry["sum_squared_error"]) for entry in quant_entries)
     total_quant_values = sum(int(entry["num_values"]) for entry in quant_entries)
+    artifact_final_bytes = 0
+    artifact_known = True
+    for row in plan["tensors"]:
+        if row["mode"] == "skip":
+            continue
+        row_bytes = estimate_row_artifact_bytes(row, plan["model_id"], tensor_inventory, shape_resolver)
+        if row_bytes is None:
+            artifact_known = False
+            continue
+        artifact_final_bytes += row_bytes
 
     manifest_path = release_dir / "manifest.json"
     log_path = release_dir.parent / "logs" / f"{release_dir.name}.log"
@@ -514,6 +615,7 @@ def build_release_monitor(
             "max_abs_error": None if not quant_entries else max(float(entry.get("max_abs_error") or 0.0) for entry in quant_entries),
             "elapsed_seconds": elapsed_seconds,
             "values_per_second": None if not elapsed_seconds else total_values_done / elapsed_seconds,
+            "artifact_final_bytes": None if not artifact_known else artifact_final_bytes,
         },
         "current": current,
         "next": upcoming,
@@ -538,7 +640,8 @@ def build_monitor_payload(
         for child in sorted(monitor_root.iterdir())
         if child.is_dir() and child.name.startswith("Qwen3.6-27B-") and (child / "plan.json").exists()
     ]
-    releases = [build_release_monitor(child, shape_resolver=shape_resolver, now=now) for child in release_dirs]
+    tensor_inventory = build_tensor_inventory(release_dirs)
+    releases = [build_release_monitor(child, tensor_inventory=tensor_inventory, shape_resolver=shape_resolver, now=now) for child in release_dirs]
 
     selected = None
     for release in releases:
@@ -585,7 +688,8 @@ def build_release_panel(releases: list[dict[str, Any]], selected_release: str | 
     table.add_column("tensors", width=20)
     table.add_column("quant", width=11)
     table.add_column("copy", width=10)
-    table.add_column("values", width=10, justify="right")
+    table.add_column("weight values", width=14, justify="right")
+    table.add_column("artifact final", width=14, justify="right")
     table.add_column("parts", width=9, justify="right")
     table.add_column("elapsed", width=10)
     table.add_column("rate", width=11, justify="right")
@@ -599,6 +703,7 @@ def build_release_panel(releases: list[dict[str, Any]], selected_release: str | 
             f"{summary['done_quantize']}/{summary['planned_quantize']}",
             f"{summary['done_copy']}/{summary['planned_copy']}",
             human_number(summary["values_done"]),
+            human_bytes(summary["artifact_final_bytes"]),
             human_number(summary["part_files_done"]),
             human_duration(summary["elapsed_seconds"]),
             human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-",
@@ -614,7 +719,8 @@ def build_overview_panel(selected: dict[str, Any]) -> Panel:
             ("state", Text(selected["state"], style=f"bold {state_style(selected['state'])}")),
             ("elapsed", human_duration(summary["elapsed_seconds"])),
             ("rate", human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-"),
-            ("values", human_number(summary["values_done"])),
+            ("weight values", human_number(summary["values_done"])),
+            ("artifact final", human_bytes(summary["artifact_final_bytes"])),
             ("avg mse", format_metric(summary["avg_quant_mse"])),
             ("max err", format_metric(summary["max_abs_error"])),
         ]
@@ -675,7 +781,7 @@ def build_current_panel(selected: dict[str, Any]) -> Panel:
                 Text(""),
                 rich_progress_row("parts", 0, upcoming.get("expected_parts"), color="cyan", detail=f"0/{upcoming.get('expected_parts', '-')}"),
                 rich_progress_row(
-                    "values",
+                    "weight values",
                     0,
                     upcoming.get("total_values"),
                     color="magenta",
@@ -700,7 +806,7 @@ def build_current_panel(selected: dict[str, Any]) -> Panel:
             detail=f"{current['part_count_done']} ok / {current['part_count_observed']} seen / {current.get('expected_parts', '-')}",
         ),
         rich_progress_row(
-            "values",
+            "weight values",
             current["written_values"],
             current.get("total_values"),
             color="magenta",
@@ -761,7 +867,7 @@ def build_recent_panel(selected: dict[str, Any]) -> Panel:
     table.add_column("time", width=8)
     table.add_column("tensor", ratio=3)
     table.add_column("category", width=18)
-    table.add_column("values", width=10, justify="right")
+    table.add_column("weight values", width=14, justify="right")
     table.add_column("parts", width=7, justify="right")
     table.add_column("mse", width=10, justify="right")
     table.add_column("maxerr", width=10, justify="right")
@@ -786,7 +892,7 @@ def build_category_panel(selected: dict[str, Any]) -> Panel:
     table = Table(box=SIMPLE_HEAVY, expand=True, header_style="bold cyan")
     table.add_column("category", ratio=2)
     table.add_column("tensors", width=8, justify="right")
-    table.add_column("values", width=10, justify="right")
+    table.add_column("weight values", width=14, justify="right")
     table.add_column("quant", width=7, justify="right")
     table.add_column("copy", width=7, justify="right")
     table.add_column("avg_mse", width=10, justify="right")
@@ -904,6 +1010,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
                 f"{summary['done_quantize']}/{summary['planned_quantize']}",
                 f"{summary['done_copy']}/{summary['planned_copy']}",
                 human_number(summary["values_done"]),
+                human_bytes(summary["artifact_final_bytes"]),
                 human_number(summary["part_files_done"]),
                 human_duration(summary["elapsed_seconds"]),
                 human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-",
@@ -911,7 +1018,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
         )
     lines.append(
         render_table(
-            ["release", "state", "tensors", "quant", "copy", "values", "parts", "elapsed", "rate"],
+            ["release", "state", "tensors", "quant", "copy", "weight values", "artifact final", "parts", "elapsed", "rate"],
             release_rows,
         )
     )
@@ -922,6 +1029,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
         f"done={summary['tensors_done']}/{summary['tensors_total']}  "
         f"quant={summary['done_quantize']}/{summary['planned_quantize']}  "
         f"copy={summary['done_copy']}/{summary['planned_copy']}  "
+        f"artifact_final={human_bytes(summary['artifact_final_bytes'])}  "
         f"avg_mse={format_metric(summary['avg_quant_mse'])}  "
         f"max_abs_error={format_metric(summary['max_abs_error'])}"
     )
@@ -944,7 +1052,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
             )
             if upcoming.get("total_values") is not None:
                 lines.append(
-                    f"expected_values={human_number(upcoming['total_values'])}  "
+                    f"expected_weight_values={human_number(upcoming['total_values'])}  "
                     f"expected_parts={upcoming.get('expected_parts', '-')}  "
                     f"expected_blocks={human_number(upcoming.get('expected_blocks'))}"
                 )
@@ -958,7 +1066,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
         lines.append(
             f"parts={current['part_count_done']} readable / {current['part_count_observed']} observed / "
             f"{current.get('expected_parts', '-') or '-'} expected  "
-            f"values={human_number(current['written_values'])}/{human_number(current.get('total_values'))} "
+            f"weight_values={human_number(current['written_values'])}/{human_number(current.get('total_values'))} "
             f"({format_percent(current['written_values'], current.get('total_values'))})"
         )
         if current.get("rows_total") is not None:
@@ -999,7 +1107,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
             ]
         )
     if recent_rows:
-        lines.append(render_table(["time", "tensor", "category", "values", "parts", "mse", "maxerr"], recent_rows))
+        lines.append(render_table(["time", "tensor", "category", "weight values", "parts", "mse", "maxerr"], recent_rows))
     else:
         lines.append("No completed tensors yet.")
 
@@ -1018,7 +1126,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
             ]
         )
     if category_rows:
-        lines.append(render_table(["category", "tensors", "values", "quant", "copy", "avg_mse", "maxerr"], category_rows))
+        lines.append(render_table(["category", "tensors", "weight values", "quant", "copy", "avg_mse", "maxerr"], category_rows))
     else:
         lines.append("No category stats yet.")
 

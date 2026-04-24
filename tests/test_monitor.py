@@ -59,6 +59,7 @@ def test_build_monitor_payload_for_running_release(tmp_path: Path) -> None:
     release_payload = payload["releases"][0]
     assert release_payload["summary"]["tensors_done"] == 1
     assert release_payload["summary"]["done_quantize"] == 1
+    assert release_payload["summary"]["artifact_final_bytes"] == 192
     assert release_payload["current"]["name"] == "b.weight"
     assert release_payload["current"]["written_values"] == 8
     assert release_payload["current"]["written_blocks"] == 2
@@ -96,3 +97,44 @@ def test_summarize_active_parts_ignores_transient_zlib_errors(tmp_path: Path, mo
     assert summary["readable_part_count"] == 1
     assert summary["written_values"] == 8
     assert summary["written_blocks"] == 2
+
+
+def test_render_monitor_uses_weight_values_label(tmp_path: Path) -> None:
+    root = tmp_path / "artifacts"
+    release = root / "Qwen3.6-27B-TQ4_SB4"
+    tensors = release / "tensors"
+    logs = root / "logs"
+    tensors.mkdir(parents=True)
+    logs.mkdir(parents=True)
+
+    (logs / "Qwen3.6-27B-TQ4_SB4.log").write_text("[2026-04-24 05:00:00] start Qwen3.6-27B-TQ4_SB4\n", encoding="utf-8")
+    (release / "plan.json").write_text(
+        """
+        {
+          "model_id": "Qwen/Qwen3.6-27B",
+          "summary": {"total_tensors": 1, "by_action": {"copy:copy": 0, "quantize:TQ4_SB4": 1}},
+          "tensors": [
+            {"name": "a.weight", "source_file": "model-00001.safetensors", "category": "mlp_proj", "mode": "quantize", "variant_name": "TQ4_SB4"}
+          ]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+    (release / "progress.jsonl").write_text(
+        '{"name":"a.weight","category":"mlp_proj","mode":"quantize","variant_name":"TQ4_SB4","dtype":"bf16","shape":[4,4],"source_file":"model-00001.safetensors","tensor_dir":"tensors/a__weight","part_count":1,"num_values":16,"mse":0.1,"max_abs_error":0.2,"sum_squared_error":1.6,"skipped":false}\n',
+        encoding="utf-8",
+    )
+    done_tensor = tensors / "a__weight"
+    done_tensor.mkdir()
+    (done_tensor / "meta.json").write_text('{"name": "a.weight"}\n', encoding="utf-8")
+
+    text = render_monitor(
+        build_monitor_payload(
+            root,
+            shape_resolver=lambda _model, _file, _name: ((4, 4), "bf16"),
+            now=1_000.0,
+        )
+    )
+
+    assert "weight values" in text
+    assert "artifact final" in text
