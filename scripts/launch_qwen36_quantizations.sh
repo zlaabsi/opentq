@@ -9,9 +9,14 @@ mkdir -p "$OUTPUT_ROOT"
 
 RUN_LOG="$OUTPUT_ROOT/overnight.log"
 PID_FILE="$OUTPUT_ROOT/overnight.pid"
+CAFFEINATE_PID_FILE="$OUTPUT_ROOT/caffeinate.pid"
 
-nohup caffeinate -dimsu "$ROOT_DIR/scripts/run_qwen36_quantizations.sh" "$OUTPUT_ROOT" >"$RUN_LOG" 2>&1 &
-echo $! >"$PID_FILE"
+nohup /bin/bash -lc "cd '$ROOT_DIR' && exec ./scripts/run_qwen36_quantizations.sh '$OUTPUT_ROOT'" >"$RUN_LOG" 2>&1 &
+BATCH_PID=$!
+nohup caffeinate -dimsu -w "$BATCH_PID" >/dev/null 2>&1 &
+echo "$BATCH_PID" >"$PID_FILE"
+echo $! >"$CAFFEINATE_PID_FILE"
 
 echo "pid=$(cat "$PID_FILE")"
+echo "caffeinate_pid=$(cat "$CAFFEINATE_PID_FILE")"
 echo "log=$RUN_LOG"

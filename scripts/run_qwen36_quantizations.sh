@@ -30,12 +30,11 @@ for release in "${RELEASES[@]}"; do
     continue
   fi
 
-  {
-    echo "[$(timestamp)] start $release"
-    PYTHONUNBUFFERED=1 uv run opentq quantize-release \
-      --recipe qwen3.6-27b \
-      --release "$release" \
-      --output "$release_dir"
-    echo "[$(timestamp)] done $release"
-  } 2>&1 | tee -a "$log_path"
+  echo "[$(timestamp)] start $release" | tee -a "$log_path"
+  PYTHONUNBUFFERED=1 uv run opentq quantize-release \
+    --recipe qwen3.6-27b \
+    --release "$release" \
+    --output "$release_dir" \
+    >>"$log_path" 2>&1
+  echo "[$(timestamp)] done $release" | tee -a "$log_path"
 done
