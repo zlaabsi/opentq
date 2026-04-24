@@ -60,6 +60,8 @@ def test_build_monitor_payload_for_running_release(tmp_path: Path) -> None:
     assert release_payload["summary"]["tensors_done"] == 1
     assert release_payload["summary"]["done_quantize"] == 1
     assert release_payload["summary"]["artifact_final_bytes"] == 192
+    expected_disk = sum(path.stat().st_size for path in release.rglob("*") if path.is_file())
+    assert release_payload["summary"]["disk_bytes"] == expected_disk
     assert release_payload["current"]["name"] == "b.weight"
     assert release_payload["current"]["written_values"] == 8
     assert release_payload["current"]["written_blocks"] == 2
@@ -137,4 +139,5 @@ def test_render_monitor_uses_weights_label(tmp_path: Path) -> None:
     )
 
     assert "weights" in text
-    assert "artifact final" in text
+    assert "artifact" in text
+    assert "disk" in text

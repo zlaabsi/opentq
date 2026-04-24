@@ -210,6 +210,18 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def directory_size_bytes(root: Path) -> int:
+    total = 0
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            total += path.stat().st_size
+        except OSError:
+            continue
+    return total
+
+
 def dtype_bytes(dtype: str | None) -> int:
     normalized = (dtype or "bf16").lower()
     if normalized in {"bf16", "bfloat16", "float16", "f16", "half"}:
@@ -588,6 +600,7 @@ def build_release_monitor(
             artifact_known = False
             continue
         artifact_final_bytes += row_bytes
+    disk_bytes = directory_size_bytes(release_dir)
 
     manifest_path = release_dir / "manifest.json"
     log_path = release_dir.parent / "logs" / f"{release_dir.name}.log"
@@ -616,6 +629,7 @@ def build_release_monitor(
             "elapsed_seconds": elapsed_seconds,
             "values_per_second": None if not elapsed_seconds else total_values_done / elapsed_seconds,
             "artifact_final_bytes": None if not artifact_known else artifact_final_bytes,
+            "disk_bytes": disk_bytes,
         },
         "current": current,
         "next": upcoming,
@@ -689,7 +703,8 @@ def build_release_panel(releases: list[dict[str, Any]], selected_release: str | 
     table.add_column("quant", width=11)
     table.add_column("copy", width=10)
     table.add_column("weights", width=14, justify="right")
-    table.add_column("artifact final", width=14, justify="right")
+    table.add_column("artifact", width=10, justify="right")
+    table.add_column("disk", width=10, justify="right")
     table.add_column("parts", width=9, justify="right")
     table.add_column("elapsed", width=10)
     table.add_column("rate", width=11, justify="right")
@@ -704,6 +719,7 @@ def build_release_panel(releases: list[dict[str, Any]], selected_release: str | 
             f"{summary['done_copy']}/{summary['planned_copy']}",
             human_number(summary["values_done"]),
             human_bytes(summary["artifact_final_bytes"]),
+            human_bytes(summary["disk_bytes"]),
             human_number(summary["part_files_done"]),
             human_duration(summary["elapsed_seconds"]),
             human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-",
@@ -720,7 +736,8 @@ def build_overview_panel(selected: dict[str, Any]) -> Panel:
             ("elapsed", human_duration(summary["elapsed_seconds"])),
             ("rate", human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-"),
             ("weights", human_number(summary["values_done"])),
-            ("artifact final", human_bytes(summary["artifact_final_bytes"])),
+            ("artifact", human_bytes(summary["artifact_final_bytes"])),
+            ("disk", human_bytes(summary["disk_bytes"])),
             ("avg mse", format_metric(summary["avg_quant_mse"])),
             ("max err", format_metric(summary["max_abs_error"])),
         ]
@@ -1011,6 +1028,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
                 f"{summary['done_copy']}/{summary['planned_copy']}",
                 human_number(summary["values_done"]),
                 human_bytes(summary["artifact_final_bytes"]),
+                human_bytes(summary["disk_bytes"]),
                 human_number(summary["part_files_done"]),
                 human_duration(summary["elapsed_seconds"]),
                 human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-",
@@ -1018,7 +1036,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
         )
     lines.append(
         render_table(
-            ["release", "state", "tensors", "quant", "copy", "weights", "artifact final", "parts", "elapsed", "rate"],
+            ["release", "state", "tensors", "quant", "copy", "weights", "artifact", "disk", "parts", "elapsed", "rate"],
             release_rows,
         )
     )
@@ -1029,7 +1047,8 @@ def render_monitor(payload: dict[str, Any]) -> str:
         f"done={summary['tensors_done']}/{summary['tensors_total']}  "
         f"quant={summary['done_quantize']}/{summary['planned_quantize']}  "
         f"copy={summary['done_copy']}/{summary['planned_copy']}  "
-        f"artifact_final={human_bytes(summary['artifact_final_bytes'])}  "
+        f"artifact={human_bytes(summary['artifact_final_bytes'])}  "
+        f"disk={human_bytes(summary['disk_bytes'])}  "
         f"avg_mse={format_metric(summary['avg_quant_mse'])}  "
         f"max_abs_error={format_metric(summary['max_abs_error'])}"
     )
