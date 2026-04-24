@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "opentq"
+version = "0.1.0"
+description = "Open quantization tooling for low-bit TQ-style weight formats."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=2.0.0",
+]
+
+[project.scripts]
+opentq = "opentq.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opentq"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_default_fixture_loop_scope = "function"
