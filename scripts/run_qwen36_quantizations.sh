@@ -12,10 +12,7 @@ RELEASES=(
   "Qwen3.6-27B-TQ4_SB4"
   "Qwen3.6-27B-TQ3_SB4"
   "Qwen3.6-27B-TQ4R2"
-  "Qwen3.6-27B-TQ_BAL_DENSE"
-  "Qwen3.6-27B-TQ2_0"
   "Qwen3.6-27B-TQ4R4"
-  "Qwen3.6-27B-TQ1_0"
 )
 
 timestamp() {
