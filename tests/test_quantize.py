@@ -20,6 +20,12 @@ def test_quantize_tensor_preserves_shape() -> None:
     assert result.packed.indices.ndim == 2
 
 
+def test_tq4_sb2_emits_two_scales_per_block() -> None:
+    tensor = np.random.default_rng(123).normal(size=(16, 16)).astype(np.float32)
+    result = quantize_tensor(tensor, get_variant("TQ4_SB2"))
+    assert result.packed.scales.shape[1] == 2
+
+
 def test_residual_quantization_emits_residual_scales() -> None:
     tensor = np.random.default_rng(7).normal(size=(16, 16)).astype(np.float32)
     result = quantize_tensor(tensor, get_variant("TQ4R2"))

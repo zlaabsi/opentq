@@ -44,6 +44,7 @@ _UNIFORM_RELEASES = {
     "QWEN3.6-27B-TQ1_0": "TQ1_0",
     "QWEN3.6-27B-TQ2_0": "TQ2_0",
     "QWEN3.6-27B-TQ3_SB4": "TQ3_SB4",
+    "QWEN3.6-27B-TQ4_SB2": "TQ4_SB2",
     "QWEN3.6-27B-TQ4_SB4": "TQ4_SB4",
     "QWEN3.6-27B-TQ4R2": "TQ4R2",
     "QWEN3.6-27B-TQ4R4": "TQ4R4",
@@ -62,6 +63,21 @@ _BALANCED_VARIANTS = {
     "visual_merger": "TQ4_SB4",
     "visual_pos_embed": "TQ4_SB4",
     "mtp_proj": "TQ4_SB4",
+}
+
+_BALANCED_V2_VARIANTS = {
+    "embeddings": "TQ4R2",
+    "lm_head": "TQ4R2",
+    "self_attn_proj": "TQ4R2",
+    "linear_attn_proj": "TQ4_SB2",
+    "linear_attn_conv": "TQ4_SB2",
+    "mlp_proj": "TQ4_SB2",
+    "visual_attn": "TQ4_SB2",
+    "visual_mlp": "TQ4_SB2",
+    "visual_patch_embed": "TQ4_SB2",
+    "visual_merger": "TQ4_SB2",
+    "visual_pos_embed": "TQ4_SB2",
+    "mtp_proj": "TQ4_SB2",
 }
 
 
@@ -87,6 +103,13 @@ def resolve_tensor_action(release_slug: str, tensor_name: str, include_vision: b
     if normalized_slug == "QWEN3.6-27B-TQ_BAL_DENSE":
         if category in _BALANCED_VARIANTS:
             return TensorAction(category=category, mode="quantize", variant_name=_BALANCED_VARIANTS[category])
+        if category in _COPY_CATEGORIES:
+            return TensorAction(category=category, mode="copy")
+        return TensorAction(category=category, mode="copy")
+
+    if normalized_slug == "QWEN3.6-27B-TQ4_BAL_V2":
+        if category in _BALANCED_V2_VARIANTS:
+            return TensorAction(category=category, mode="quantize", variant_name=_BALANCED_V2_VARIANTS[category])
         if category in _COPY_CATEGORIES:
             return TensorAction(category=category, mode="copy")
         return TensorAction(category=category, mode="copy")

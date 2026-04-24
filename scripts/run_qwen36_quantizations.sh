@@ -13,6 +13,7 @@ RELEASES=(
   "Qwen3.6-27B-TQ3_SB4"
   "Qwen3.6-27B-TQ4R2"
   "Qwen3.6-27B-TQ4R4"
+  "Qwen3.6-27B-TQ4_BAL_V2"
 )
 
 timestamp() {

@@ -33,6 +33,11 @@ The public `TQ3_4S` label is useful as a reference point, but not as a long-term
 - role: default release
 - target: strongest first candidate for Apple Silicon and `llama.cpp`
 
+### `TQ4_SB2`
+
+- role: redesigned 16 GiB-class uniform 4-bit path
+- target: Qwen3.6-27B-scale models where `TQ4_SB4` is too large but a 4-bit primary quantizer is still preferred
+
 ### `TQ4R2`
 
 - role: quality-biased 6-bit total
@@ -47,4 +52,3 @@ The public `TQ3_4S` label is useful as a reference point, but not as a long-term
 
 - role: release recipe for MoE
 - target: architectures where a single global bit policy leaves quality on the table
-

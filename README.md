@@ -24,10 +24,11 @@ The public `TQ3_4S` ecosystem proves that low-bit WHT-rotated weight formats can
 | `TQ1_0` | minimum footprint | ternary / near-ternary baseline |
 | `TQ2_0` | very low memory | 2-bit scalar path |
 | `TQ3_SB4` | compact general-purpose | 3-bit WHT with four sub-block scales |
+| `TQ4_SB2` | balanced 16 GiB path | 4-bit WHT with two sub-block scales |
 | `TQ4_SB4` | daily driver | 4-bit WHT with four sub-block scales |
 | `TQ4R2` | quality-first 6-bit total | 4+2 residual quantization |
 | `TQ4R4` | near-lossless 8-bit total | 4+4 residual quantization |
-| `TQ_BAL_DENSE` | dense-hybrid mixed profile | model-aware release recipe for Qwen3.6-27B-class dense models |
+| `TQ4_BAL_V2` | dense-hybrid mixed profile | model-aware flagship recipe built around `TQ4_SB2` + `TQ4R2` |
 | `TQ_MIX_MOE` | MoE-aware release profile | tensor-role-aware mixed precision |
 
 `SB4` means "4 sub-block scales per block". The naming is deliberate: it describes the format instead of inheriting an opaque revision suffix.
@@ -62,8 +63,8 @@ uv run opentq plan TQ4R2 --shape 8192 8192
 uv run opentq quantize weights.npy --variant TQ3_SB4 --output artifacts/q_proj
 uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
-uv run opentq release-plan --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_SB4
-uv run opentq quantize-release --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_SB4 --output artifacts/qwen36-tq4sb4 --max-tensors 8
+uv run opentq release-plan --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2
+uv run opentq quantize-release --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2 --output artifacts/qwen36-tq4balv2 --max-tensors 8
 ```
 
 For unattended overnight runs on Apple Silicon, launch the resumable Qwen3.6-27B batch with:

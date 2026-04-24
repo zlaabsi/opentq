@@ -63,6 +63,16 @@ VARIANTS: dict[str, QuantVariant] = {
         intended_use="compact-general-purpose",
         notes="Closest open analogue to the public 3.5-bit WHT family, without opaque revision labels.",
     ),
+    "TQ4_SB2": QuantVariant(
+        name="TQ4_SB2",
+        weight_bits=4,
+        group_size=128,
+        block_size=32,
+        sub_block_size=16,
+        sub_block_scales=2,
+        intended_use="balanced-16gib",
+        notes="4-bit WHT with two sub-block scales per 32-weight block; the first practical redesign for ~16 GiB Qwen3.6-27B releases.",
+    ),
     "TQ4_SB4": QuantVariant(
         name="TQ4_SB4",
         weight_bits=4,
@@ -115,4 +125,3 @@ def get_variant(name: str) -> QuantVariant:
     except KeyError as exc:
         available = ", ".join(sorted(VARIANTS))
         raise KeyError(f"unknown variant {name!r}; available: {available}") from exc
-
