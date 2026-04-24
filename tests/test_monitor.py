@@ -99,7 +99,7 @@ def test_summarize_active_parts_ignores_transient_zlib_errors(tmp_path: Path, mo
     assert summary["written_blocks"] == 2
 
 
-def test_render_monitor_uses_weight_values_label(tmp_path: Path) -> None:
+def test_render_monitor_uses_weights_label(tmp_path: Path) -> None:
     root = tmp_path / "artifacts"
     release = root / "Qwen3.6-27B-TQ4_SB4"
     tensors = release / "tensors"
@@ -136,5 +136,5 @@ def test_render_monitor_uses_weight_values_label(tmp_path: Path) -> None:
         )
     )
 
-    assert "weight values" in text
+    assert "weights" in text
     assert "artifact final" in text

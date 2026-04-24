@@ -688,7 +688,7 @@ def build_release_panel(releases: list[dict[str, Any]], selected_release: str | 
     table.add_column("tensors", width=20)
     table.add_column("quant", width=11)
     table.add_column("copy", width=10)
-    table.add_column("weight values", width=14, justify="right")
+    table.add_column("weights", width=14, justify="right")
     table.add_column("artifact final", width=14, justify="right")
     table.add_column("parts", width=9, justify="right")
     table.add_column("elapsed", width=10)
@@ -719,7 +719,7 @@ def build_overview_panel(selected: dict[str, Any]) -> Panel:
             ("state", Text(selected["state"], style=f"bold {state_style(selected['state'])}")),
             ("elapsed", human_duration(summary["elapsed_seconds"])),
             ("rate", human_number(summary["values_per_second"]) + "/s" if summary["values_per_second"] is not None else "-"),
-            ("weight values", human_number(summary["values_done"])),
+            ("weights", human_number(summary["values_done"])),
             ("artifact final", human_bytes(summary["artifact_final_bytes"])),
             ("avg mse", format_metric(summary["avg_quant_mse"])),
             ("max err", format_metric(summary["max_abs_error"])),
@@ -781,7 +781,7 @@ def build_current_panel(selected: dict[str, Any]) -> Panel:
                 Text(""),
                 rich_progress_row("parts", 0, upcoming.get("expected_parts"), color="cyan", detail=f"0/{upcoming.get('expected_parts', '-')}"),
                 rich_progress_row(
-                    "weight values",
+                    "weights",
                     0,
                     upcoming.get("total_values"),
                     color="magenta",
@@ -806,7 +806,7 @@ def build_current_panel(selected: dict[str, Any]) -> Panel:
             detail=f"{current['part_count_done']} ok / {current['part_count_observed']} seen / {current.get('expected_parts', '-')}",
         ),
         rich_progress_row(
-            "weight values",
+            "weights",
             current["written_values"],
             current.get("total_values"),
             color="magenta",
@@ -867,7 +867,7 @@ def build_recent_panel(selected: dict[str, Any]) -> Panel:
     table.add_column("time", width=8)
     table.add_column("tensor", ratio=3)
     table.add_column("category", width=18)
-    table.add_column("weight values", width=14, justify="right")
+    table.add_column("weights", width=14, justify="right")
     table.add_column("parts", width=7, justify="right")
     table.add_column("mse", width=10, justify="right")
     table.add_column("maxerr", width=10, justify="right")
@@ -892,7 +892,7 @@ def build_category_panel(selected: dict[str, Any]) -> Panel:
     table = Table(box=SIMPLE_HEAVY, expand=True, header_style="bold cyan")
     table.add_column("category", ratio=2)
     table.add_column("tensors", width=8, justify="right")
-    table.add_column("weight values", width=14, justify="right")
+    table.add_column("weights", width=14, justify="right")
     table.add_column("quant", width=7, justify="right")
     table.add_column("copy", width=7, justify="right")
     table.add_column("avg_mse", width=10, justify="right")
@@ -1018,7 +1018,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
         )
     lines.append(
         render_table(
-            ["release", "state", "tensors", "quant", "copy", "weight values", "artifact final", "parts", "elapsed", "rate"],
+            ["release", "state", "tensors", "quant", "copy", "weights", "artifact final", "parts", "elapsed", "rate"],
             release_rows,
         )
     )
@@ -1052,7 +1052,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
             )
             if upcoming.get("total_values") is not None:
                 lines.append(
-                    f"expected_weight_values={human_number(upcoming['total_values'])}  "
+                    f"expected_weights={human_number(upcoming['total_values'])}  "
                     f"expected_parts={upcoming.get('expected_parts', '-')}  "
                     f"expected_blocks={human_number(upcoming.get('expected_blocks'))}"
                 )
@@ -1066,7 +1066,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
         lines.append(
             f"parts={current['part_count_done']} readable / {current['part_count_observed']} observed / "
             f"{current.get('expected_parts', '-') or '-'} expected  "
-            f"weight_values={human_number(current['written_values'])}/{human_number(current.get('total_values'))} "
+            f"weights={human_number(current['written_values'])}/{human_number(current.get('total_values'))} "
             f"({format_percent(current['written_values'], current.get('total_values'))})"
         )
         if current.get("rows_total") is not None:
@@ -1107,7 +1107,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
             ]
         )
     if recent_rows:
-        lines.append(render_table(["time", "tensor", "category", "weight values", "parts", "mse", "maxerr"], recent_rows))
+        lines.append(render_table(["time", "tensor", "category", "weights", "parts", "mse", "maxerr"], recent_rows))
     else:
         lines.append("No completed tensors yet.")
 
@@ -1126,7 +1126,7 @@ def render_monitor(payload: dict[str, Any]) -> str:
             ]
         )
     if category_rows:
-        lines.append(render_table(["category", "tensors", "weight values", "quant", "copy", "avg_mse", "maxerr"], category_rows))
+        lines.append(render_table(["category", "tensors", "weights", "quant", "copy", "avg_mse", "maxerr"], category_rows))
     else:
         lines.append("No category stats yet.")
 
