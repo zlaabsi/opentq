@@ -114,6 +114,84 @@ def dump_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
+def load_progress_results(path: Path) -> list[TensorArtifactResult]:
+    if not path.exists():
+        return []
+
+    results: list[TensorArtifactResult] = []
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            results.append(
+                TensorArtifactResult(
+                    name=payload["name"],
+                    category=payload["category"],
+                    mode=payload["mode"],
+                    variant_name=payload.get("variant_name"),
+                    dtype=payload["dtype"],
+                    shape=tuple(int(dim) for dim in payload["shape"]),
+                    source_file=payload["source_file"],
+                    tensor_dir=payload["tensor_dir"],
+                    part_count=int(payload["part_count"]),
+                    num_values=int(payload["num_values"]),
+                    mse=None if payload.get("mse") is None else float(payload["mse"]),
+                    max_abs_error=None if payload.get("max_abs_error") is None else float(payload["max_abs_error"]),
+                    sum_squared_error=None if payload.get("sum_squared_error") is None else float(payload["sum_squared_error"]),
+                    skipped=bool(payload.get("skipped", False)),
+                )
+            )
+    return results
+
+
+def tensor_result_from_meta(meta_path: Path, output_root: Path) -> TensorArtifactResult:
+    payload = json.loads(meta_path.read_text(encoding="utf-8"))
+    shape = tuple(int(dim) for dim in payload["shape"])
+    return TensorArtifactResult(
+        name=payload["name"],
+        category=payload["category"],
+        mode=payload["mode"],
+        variant_name=payload.get("variant_name"),
+        dtype=payload["dtype"],
+        shape=shape,
+        source_file=payload["source_file"],
+        tensor_dir=str(meta_path.parent.relative_to(output_root)),
+        part_count=int(payload["part_count"]),
+        num_values=int(np.prod(shape)),
+        mse=None,
+        max_abs_error=None,
+        sum_squared_error=None,
+        skipped=False,
+    )
+
+
+def seed_existing_results(output_root: Path, plan: dict[str, Any], progress_path: Path) -> list[TensorArtifactResult]:
+    results = load_progress_results(progress_path)
+    seen_names = {result.name for result in results}
+    recovered: list[TensorArtifactResult] = []
+
+    for row in plan["tensors"]:
+        if row["mode"] == "skip" or row["name"] in seen_names:
+            continue
+        meta_path = tensor_dir(output_root, row["name"]) / "meta.json"
+        if not meta_path.exists():
+            continue
+        result = tensor_result_from_meta(meta_path, output_root)
+        results.append(result)
+        recovered.append(result)
+        seen_names.add(result.name)
+
+    if recovered:
+        progress_path.parent.mkdir(parents=True, exist_ok=True)
+        with progress_path.open("a", encoding="utf-8") as handle:
+            for result in recovered:
+                handle.write(json.dumps(asdict(result)) + "\n")
+
+    return results
+
+
 def write_copy_tensor(reader: Any, tensor_name: str, source_file: str, action: TensorAction, output_root: Path) -> TensorArtifactResult:
     destination = tensor_dir(output_root, tensor_name)
     destination.mkdir(parents=True, exist_ok=True)
@@ -287,8 +365,8 @@ def quantize_release(
             continue
         tensors_by_shard.setdefault(row["source_file"], []).append(row)
 
-    processed_results: list[TensorArtifactResult] = []
-    processed_count = 0
+    processed_results = seed_existing_results(output_root, plan, progress_path) if skip_existing else []
+    processed_count = len(processed_results)
     started_at = time.time()
 
     for shard_file in sorted(tensors_by_shard):
@@ -324,6 +402,7 @@ def quantize_release(
 
     summary_counter = Counter(result.mode for result in processed_results)
     quantized = [result for result in processed_results if result.mode == "quantize"]
+    quantized_with_metrics = [result for result in quantized if result.mse is not None]
     manifest = {
         "recipe_key": recipe_key,
         "model_id": recipe.model_id,
@@ -335,8 +414,8 @@ def quantize_release(
         "elapsed_seconds": round(time.time() - started_at, 2),
         "counts": dict(summary_counter),
         "quantized_tensors": len(quantized),
-        "avg_quant_mse": None if not quantized else float(sum(result.mse for result in quantized if result.mse is not None) / len(quantized)),
-        "max_abs_error": None if not quantized else float(max(result.max_abs_error or 0.0 for result in quantized)),
+        "avg_quant_mse": None if not quantized_with_metrics else float(sum(result.mse for result in quantized_with_metrics if result.mse is not None) / len(quantized_with_metrics)),
+        "max_abs_error": None if not quantized_with_metrics else float(max(result.max_abs_error or 0.0 for result in quantized_with_metrics)),
         "results": [asdict(result) for result in processed_results],
     }
     dump_json(output_root / "manifest.json", manifest)

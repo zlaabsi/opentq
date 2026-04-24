@@ -7,11 +7,26 @@ from pathlib import Path
 from typing import Any
 
 
-def progress_lines(path: Path) -> int:
+def progress_summary(path: Path) -> dict[str, int]:
+    summary = {
+        "processed_tensors": 0,
+        "quantized_tensors": 0,
+        "copied_tensors": 0,
+    }
     if not path.exists():
-        return 0
+        return summary
     with path.open("r", encoding="utf-8") as handle:
-        return sum(1 for _ in handle)
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            payload = json.loads(line)
+            summary["processed_tensors"] += 1
+            if payload.get("mode") == "quantize":
+                summary["quantized_tensors"] += 1
+            elif payload.get("mode") == "copy":
+                summary["copied_tensors"] += 1
+    return summary
 
 
 def count_parts(root: Path) -> int:
@@ -39,15 +54,16 @@ def build_status_payload(root: str | Path = "artifacts/qwen3.6-27b") -> dict[str
             continue
         manifest_path = child / "manifest.json"
         progress_path = child / "progress.jsonl"
+        progress = progress_summary(progress_path)
         if manifest_path.exists():
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             releases.append(
                 {
                     "release": child.name,
                     "state": "done",
-                    "processed_tensors": manifest.get("processed_tensors"),
+                    "processed_tensors": max(int(manifest.get("processed_tensors") or 0), progress["processed_tensors"]),
                     "elapsed_seconds": manifest.get("elapsed_seconds"),
-                    "quantized_tensors": manifest.get("quantized_tensors"),
+                    "quantized_tensors": max(int(manifest.get("quantized_tensors") or 0), progress["quantized_tensors"]),
                 }
             )
             continue
@@ -55,7 +71,7 @@ def build_status_payload(root: str | Path = "artifacts/qwen3.6-27b") -> dict[str
             {
                 "release": child.name,
                 "state": "running",
-                "processed_tensors": progress_lines(progress_path),
+                "processed_tensors": progress["processed_tensors"],
                 "active_tensor_dirs": count_tensor_dirs(child),
                 "written_part_files": count_parts(child),
             }
