@@ -277,7 +277,8 @@ def estimate_quantized_tensor_bytes(num_values: int, weight_bits: int, residual_
     padded_values = math.ceil(num_values / group_size) * group_size
     blocks = padded_values // block_size
     sub_block_scales = block_size // sub_block_size
-    total_bits = padded_values * (weight_bits + residual_bits) + (blocks * sub_block_scales * 16)
+    scale_passes = 2 if residual_bits else 1
+    total_bits = padded_values * (weight_bits + residual_bits) + (blocks * sub_block_scales * 16 * scale_passes)
     return math.ceil(total_bits / 8)
 
 

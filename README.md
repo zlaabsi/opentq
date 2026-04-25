@@ -49,8 +49,7 @@ This initial commit gives you:
 
 What it does **not** do yet:
 
-- end-to-end Hugging Face model conversion
-- GGUF tensor emission
+- stock `llama.cpp` GGUF tensor emission
 - Metal kernels for the custom runtime
 - model-wide calibration and tensor-role heuristics
 
@@ -65,6 +64,9 @@ uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
 uv run opentq release-plan --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2
 uv run opentq quantize-release --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2 --output artifacts/qwen36-tq4balv2 --max-tensors 8
+uv run opentq pack-release --input artifacts/qwen36-tq4balv2 --output artifacts/qwen36-tq4balv2-packed
+uv run opentq gguf-plan --packed artifacts/qwen36-tq4balv2-packed --output artifacts/qwen36-tq4balv2-packed/gguf-plan.json
+uv run opentq prepare-hf --packed artifacts/qwen36-tq4balv2-packed --output artifacts/hf/qwen36-tq4balv2 --repo-id zlaabsi/Qwen3.6-27B-TQ4_BAL_V2
 ```
 
 For unattended overnight runs on Apple Silicon, launch the resumable Qwen3.6-27B batch with:
@@ -80,6 +82,15 @@ uv run opentq monitor --watch
 
 `opentq monitor --watch` uses a full-screen Rich TUI with colored panels, live progress bars, current-tensor inspection, recent timeline, and category aggregates.
 
+For the release path after quantization:
+
+```bash
+./scripts/pack_qwen36_releases.sh
+HF_USER=zlaabsi ./scripts/stage_qwen36_hf_releases.sh
+```
+
+See [inference-release-checklist.md](/Users/zlaabsi/Documents/GitHub/opentq/docs/inference-release-checklist.md) for the OpenTQ packed format, Hugging Face staging, and the remaining `llama.cpp` GGUF work.
+
 ## Repo layout
 
 ```text
@@ -92,6 +103,6 @@ patches/llama.cpp/   planned upstream integration notes and patch strategy
 ## Next steps
 
 1. add tensor-role-aware calibration over Hugging Face safetensors
-2. emit GGUF custom tensor payloads for `llama.cpp`
+2. emit stock GGUF custom tensor payloads for `llama.cpp`
 3. land Metal decode kernels for `TQ3_SB4`, `TQ4_SB4`, and `TQ4R2`
 4. benchmark on M1 Max, M2 Max, M3 Max, and M4 Max with long-context agentic prompts

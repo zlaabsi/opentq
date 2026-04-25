@@ -7,9 +7,12 @@ from pathlib import Path
 import numpy as np
 
 from .hf import base_weight_size_gib, fetch_safetensors_index
+from .gguf import write_gguf_plan
+from .hf_release import prepare_hf_release
 from .inventory import build_inventory, inventory_summary
 from .monitor import build_monitor_payload, print_monitor, watch_monitor
 from .quantize import quantize_tensor
+from .release_pack import pack_release
 from .recipes import get_recipe, recipe_markdown, recipe_to_dict
 from .run import build_release_plan, quantize_release
 from .status import build_status_payload, print_status, watch_status
@@ -65,6 +68,23 @@ def build_parser() -> argparse.ArgumentParser:
     monitor.add_argument("--root", default="artifacts/qwen3.6-27b")
     monitor.add_argument("--watch", action="store_true")
     monitor.add_argument("--interval", type=float, default=5.0)
+
+    pack_release_parser = sub.add_parser("pack-release", help="Bit-pack a completed OpenTQ release directory.")
+    pack_release_parser.add_argument("--input", required=True)
+    pack_release_parser.add_argument("--output", required=True)
+    pack_release_parser.add_argument("--force", action="store_true")
+    pack_release_parser.add_argument("--max-tensors", type=int)
+    pack_release_parser.add_argument("--copy-dtype", default="float16")
+
+    hf_release_parser = sub.add_parser("prepare-hf", help="Create a Hugging Face staging folder from a packed OpenTQ release.")
+    hf_release_parser.add_argument("--packed", required=True)
+    hf_release_parser.add_argument("--output", required=True)
+    hf_release_parser.add_argument("--repo-id", required=True)
+    hf_release_parser.add_argument("--link-mode", choices=("hardlink", "copy", "symlink", "none"), default="hardlink")
+
+    gguf_plan = sub.add_parser("gguf-plan", help="Write the GGUF integration plan for a packed OpenTQ release.")
+    gguf_plan.add_argument("--packed", required=True)
+    gguf_plan.add_argument("--output", required=True)
 
     return parser
 
@@ -205,6 +225,39 @@ def cmd_monitor(root: str, watch: bool, interval: float) -> int:
     return 0
 
 
+def cmd_pack_release(input_dir: str, output: str, force: bool, max_tensors: int | None, copy_dtype: str) -> int:
+    payload = pack_release(input_dir, output, force=force, max_tensors=max_tensors, copy_dtype=copy_dtype)
+    summary = {
+        "manifest": str(Path(output) / "opentq-pack.json"),
+        "release_slug": payload["release_slug"],
+        "model_id": payload["model_id"],
+        "schema": payload["schema"],
+        "totals": payload["totals"],
+    }
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
+def cmd_prepare_hf(packed: str, output: str, repo_id: str, link_mode: str) -> int:
+    payload = prepare_hf_release(packed, output, repo_id, link_mode=link_mode)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def cmd_gguf_plan(packed: str, output: str) -> int:
+    payload = write_gguf_plan(packed, output)
+    summary = {
+        "manifest": output,
+        "schema": payload["schema"],
+        "release_slug": payload["release_slug"],
+        "status": payload["status"],
+        "custom_tensor_types": payload["custom_tensor_types"],
+        "tensor_count": len(payload["tensors"]),
+    }
+    print(json.dumps(summary, indent=2))
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -236,6 +289,12 @@ def main() -> int:
         return cmd_status(args.root, args.watch, args.interval)
     if args.command == "monitor":
         return cmd_monitor(args.root, args.watch, args.interval)
+    if args.command == "pack-release":
+        return cmd_pack_release(args.input, args.output, args.force, args.max_tensors, args.copy_dtype)
+    if args.command == "prepare-hf":
+        return cmd_prepare_hf(args.packed, args.output, args.repo_id, args.link_mode)
+    if args.command == "gguf-plan":
+        return cmd_gguf_plan(args.packed, args.output)
     parser.error(f"unknown command: {args.command}")
     return 2
 

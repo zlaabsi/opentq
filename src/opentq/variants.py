@@ -27,7 +27,8 @@ class QuantVariant:
         return self.residual_bits is not None
 
     def estimated_bpw(self) -> float:
-        scale_overhead = self.sub_block_scales * 16 / self.block_size
+        scale_passes = 2 if self.residual_bits is not None else 1
+        scale_overhead = scale_passes * self.sub_block_scales * 16 / self.block_size
         return float(self.total_bits + scale_overhead)
 
 
