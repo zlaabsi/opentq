@@ -10,6 +10,7 @@ from .hf import base_weight_size_gib, fetch_safetensors_index
 from .gguf import write_gguf_plan
 from .gguf_export import GGUFExportOptions, export_gguf
 from .gguf_validate import GGUFValidationOptions, validate_gguf
+from .dynamic_gguf import DynamicGGUFPlanOptions, dynamic_profiles_payload, write_dynamic_gguf_plan
 from .hf_gguf_release import prepare_hf_gguf_release
 from .hf_release import prepare_hf_release
 from .inventory import build_inventory, inventory_summary
@@ -28,6 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("variants", help="List built-in quantization variants.")
+
+    sub.add_parser("dynamic-gguf-profiles", help="List stock-compatible dynamic GGUF profiles.")
 
     plan = sub.add_parser("plan", help="Estimate bit budget and storage for a variant.")
     plan.add_argument("variant")
@@ -97,6 +100,17 @@ def build_parser() -> argparse.ArgumentParser:
     gguf_export.add_argument("--max-tensors", type=int)
     gguf_export.add_argument("--include-vision", action="store_true")
 
+    dynamic_gguf = sub.add_parser("dynamic-gguf-plan", help="Create a stock llama.cpp GGUF dynamic allocation plan.")
+    dynamic_gguf.add_argument("--recipe", default="qwen3.6-27b")
+    dynamic_gguf.add_argument("--profile", required=True)
+    dynamic_gguf.add_argument("--output", required=True)
+    dynamic_gguf.add_argument("--llama-cpp", default="../llama.cpp")
+    dynamic_gguf.add_argument("--source-gguf")
+    dynamic_gguf.add_argument("--target-gguf")
+    dynamic_gguf.add_argument("--include-vision", action="store_true")
+    dynamic_gguf.add_argument("--vision-only", action="store_true")
+    dynamic_gguf.add_argument("--no-converter-mapping", action="store_true")
+
     hf_gguf_release_parser = sub.add_parser("prepare-hf-gguf", help="Create a Hugging Face staging folder from a GGUF artifact.")
     hf_gguf_release_parser.add_argument("--gguf", required=True)
     hf_gguf_release_parser.add_argument("--output", required=True)
@@ -159,6 +173,11 @@ def cmd_variants() -> int:
             }
         )
     print(json.dumps(rows, indent=2))
+    return 0
+
+
+def cmd_dynamic_gguf_profiles() -> int:
+    print(json.dumps(dynamic_profiles_payload(), indent=2))
     return 0
 
 
@@ -329,6 +348,47 @@ def cmd_export_gguf(packed: str, output: str, llama_cpp: str, max_tensors: int |
     return 0
 
 
+def cmd_dynamic_gguf_plan(
+    recipe: str,
+    profile: str,
+    output: str,
+    llama_cpp: str,
+    source_gguf: str | None,
+    target_gguf: str | None,
+    include_vision: bool,
+    vision_only: bool,
+    no_converter_mapping: bool,
+) -> int:
+    payload = write_dynamic_gguf_plan(
+        DynamicGGUFPlanOptions(
+            recipe_key=recipe,
+            profile_name=profile,
+            output_dir=Path(output),
+            llama_cpp_dir=Path(llama_cpp),
+            source_gguf=Path(source_gguf) if source_gguf else None,
+            target_gguf=Path(target_gguf) if target_gguf else None,
+            include_vision=include_vision,
+            include_language=not vision_only,
+            use_converter_mapping=not no_converter_mapping,
+        )
+    )
+    print(
+        json.dumps(
+            {
+                "schema": payload["schema"],
+                "model_id": payload["model_id"],
+                "profile": payload["profile"]["name"],
+                "base_ftype": payload["profile"]["base_ftype"],
+                "compatibility": payload["compatibility"],
+                "outputs": payload["outputs"],
+                "summary": payload["summary"],
+            },
+            indent=2,
+        )
+    )
+    return 0 if payload["summary"]["unmapped_count"] == 0 else 1
+
+
 def cmd_prepare_hf_gguf(
     gguf: str,
     output: str,
@@ -443,6 +503,8 @@ def main() -> int:
 
     if args.command == "variants":
         return cmd_variants()
+    if args.command == "dynamic-gguf-profiles":
+        return cmd_dynamic_gguf_profiles()
     if args.command == "plan":
         return cmd_plan(args.variant, args.shape)
     if args.command == "quantize":
@@ -476,6 +538,18 @@ def main() -> int:
         return cmd_gguf_plan(args.packed, args.output)
     if args.command == "export-gguf":
         return cmd_export_gguf(args.packed, args.output, args.llama_cpp, args.max_tensors, args.include_vision)
+    if args.command == "dynamic-gguf-plan":
+        return cmd_dynamic_gguf_plan(
+            args.recipe,
+            args.profile,
+            args.output,
+            args.llama_cpp,
+            args.source_gguf,
+            args.target_gguf,
+            args.include_vision,
+            args.vision_only,
+            args.no_converter_mapping,
+        )
     if args.command == "prepare-hf-gguf":
         return cmd_prepare_hf_gguf(
             args.gguf,

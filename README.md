@@ -1,8 +1,9 @@
 # OpenTQ
 
-`OpenTQ` is an open quantization lab for low-bit weight formats inspired by the 2026 TurboQuant line of work, but designed as a public family with explicit specs, reproducible tooling, and two runtime targets:
+`OpenTQ` is an open quantization lab for low-bit weight formats inspired by the 2026 TurboQuant line of work, but designed as a public family with explicit specs, reproducible tooling, and three runtime/release targets:
 
-- `llama.cpp` via GGUF export plus patchsets
+- stock `llama.cpp` via dynamic-compatible GGUF allocation over existing tensor types
+- `llama.cpp-opentq` via GGUF export plus custom OpenTQ tensor patchsets
 - `opentq-metal`, an Apple Silicon runtime built around compressed-domain decode, KV compression, and optional speculative decoding
 
 ## Why this repo exists
@@ -41,7 +42,7 @@ This initial commit gives you:
   - Gaussian Lloyd-Max codebook generation
   - fast Walsh-Hadamard rotation
   - block quantization and residual quantization for `.npy` tensors
-  - a CLI to inspect variants, estimate size, quantize demo tensors, inspect a Hugging Face safetensors index, print a model release matrix, and run a full release quantization over HF safetensors
+  - a CLI to inspect variants, estimate size, quantize demo tensors, inspect a Hugging Face safetensors index, print a model release matrix, create stock-compatible dynamic GGUF plans, and run a full release quantization over HF safetensors
 - architecture docs for:
   - the `llama.cpp` path
   - the Apple Silicon runtime path
@@ -51,7 +52,7 @@ What it does **not** do yet:
 
 - upstream stock `llama.cpp` support for OpenTQ tensor types
 - optimized Metal kernels for the custom runtime
-- model-wide calibration and tensor-role heuristics
+- model-wide KLD calibration beyond the initial tensor-role dynamic heuristics
 
 ## Quick start
 
@@ -62,6 +63,8 @@ uv run opentq plan TQ4R2 --shape 8192 8192
 uv run opentq quantize weights.npy --variant TQ3_SB4 --output artifacts/q_proj
 uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
+uv run opentq dynamic-gguf-profiles
+uv run opentq dynamic-gguf-plan --profile OTQ-DYN-Q4_XL --output artifacts/qwen36-otq-dyn-q4-xl --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp
 uv run opentq release-plan --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2
 uv run opentq quantize-release --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2 --output artifacts/qwen36-tq4balv2 --max-tensors 8
 uv run opentq pack-release --input artifacts/qwen36-tq4balv2 --output artifacts/qwen36-tq4balv2-packed
@@ -91,9 +94,10 @@ For the release path after quantization:
 HF_USER=zlaabsi ./scripts/stage_qwen36_gguf_releases.sh
 ```
 
-The OpenTQ `.otq` packs are private/research artifacts for now. Public Hugging Face releases should use the `*-GGUF` staging path and the patched `llama.cpp` runtime until the OpenTQ tensor types are upstreamed.
+The OpenTQ `.otq` packs are private/research artifacts for now. Public Hugging Face releases should prioritize dynamic-compatible `OTQ-DYN-*-GGUF` artifacts when stock llama.cpp compatibility is required. Native `TQ*` GGUF artifacts remain tied to `llama.cpp-opentq` until the custom tensor types and Metal kernels are release-grade.
 
 See [inference-release-checklist.md](/Users/zlaabsi/Documents/GitHub/opentq/docs/inference-release-checklist.md) for the OpenTQ packed format, GGUF staging, and runtime validation flow.
+See [dynamic-compatible-gguf.md](/Users/zlaabsi/Documents/GitHub/opentq/docs/dynamic-compatible-gguf.md) for the stock-compatible GGUF path.
 
 ## Repo layout
 
@@ -107,6 +111,6 @@ patches/llama.cpp/   planned upstream integration notes and patch strategy
 ## Next steps
 
 1. add tensor-role-aware calibration over Hugging Face safetensors
-2. emit stock GGUF custom tensor payloads for `llama.cpp`
+2. release stock-compatible dynamic GGUFs with standard llama.cpp tensor types
 3. land Metal decode kernels for `TQ3_SB4`, `TQ4_SB4`, and `TQ4R2`
 4. benchmark on M1 Max, M2 Max, M3 Max, and M4 Max with long-context agentic prompts

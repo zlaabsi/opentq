@@ -22,6 +22,10 @@ This is the model-specific execution plan for `Qwen/Qwen3.6-27B`.
 | 6 | `Qwen3.6-27B-TQ2_0` | uniform | `~9.6-9.8 GiB` | aggressive memory floor |
 | 7 | `Qwen3.6-27B-TQ4R4` | residual | `~38.6-39.0 GiB` | near-lossless reference |
 | 8 | `Qwen3.6-27B-TQ1_0` | uniform | `~6.3-6.6 GiB` | research lower bound |
+| 9 | `Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF` | dynamic-compatible | dry-run required | primary stock llama.cpp public candidate |
+| 10 | `Qwen3.6-27B-OTQ-DYN-Q3_XL-GGUF` | dynamic-compatible | dry-run required | compact stock llama.cpp candidate |
+| 11 | `Qwen3.6-27B-OTQ-DYN-Q5_XL-GGUF` | dynamic-compatible | dry-run required | quality-first stock llama.cpp candidate |
+| 12 | `Qwen3.6-27B-OTQ-DYN-IQ4_NL-GGUF` | dynamic-compatible-imatrix | dry-run required | calibrated nonlinear 4-bit experiment |
 
 ## Mixed flagship policy
 
@@ -37,6 +41,16 @@ This is the model-specific execution plan for `Qwen/Qwen3.6-27B`.
 The hypothesis is simple: pay residual bits where routing and output sensitivity are highest, while moving the bulk MLP and linear-attention weights to the lighter `TQ4_SB2` path. The residual path stores both primary scales and residual scales, so the packed target is closer to the 19 GiB class than the original 16 GiB planning target.
 
 ## Runtime split
+
+### Dynamic-compatible stock GGUF track
+
+- emits normal GGUFs with only standard llama.cpp tensor types
+- uses `llama-quantize --tensor-type-file` for per-tensor allocation
+- does not require `llama.cpp-opentq`, custom GGML types, or OpenTQ Metal kernels
+- is the correct first public Hugging Face release path while native OpenTQ kernels are not release-grade
+- keeps the same smoke, quality, and long-context wall-clock gates as native OpenTQ
+
+See `docs/dynamic-compatible-gguf.md`.
 
 ### llama.cpp track
 
@@ -58,11 +72,13 @@ The hypothesis is simple: pay residual bits where routing and output sensitivity
 4. `TQ4R2`
 5. `TQ4R4`
 6. `TQ4_BAL_V2`
-7. runtime patchsets
+7. dynamic-compatible stock GGUF profiles
+8. runtime patchsets
 
 ## CLI
 
 ```bash
 uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
+uv run opentq dynamic-gguf-profiles
 ```

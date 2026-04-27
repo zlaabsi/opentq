@@ -9,6 +9,7 @@
    - residual passes
    - calibration and tensor-role policies
 2. `artifact emitters`
+   - stock-compatible dynamic GGUF plans that use standard llama.cpp tensor types
    - GGUF custom tensor payloads for `llama.cpp`
    - a compact runtime-native format for `opentq-metal`
 3. `runtime adapters`
@@ -46,13 +47,25 @@ Residual quantization is treated as a first-class family member, not a special c
 
 ## Runtime split
 
-### `llama.cpp`
+### stock `llama.cpp`
 
-The `llama.cpp` track optimizes for:
+The dynamic-compatible GGUF track optimizes for:
 
-- broad ecosystem compatibility
-- robust prefill on long contexts
-- easy OpenAI-compatible serving
+- immediate compatibility with unpatched llama.cpp
+- mature Metal kernels on Apple Silicon
+- standard `llama-server` deployment and OpenAI-compatible serving
+- per-tensor allocation through `llama-quantize --tensor-type-file`
+
+This track does not claim a new weight encoding. It is an OpenTQ allocation and validation policy over existing GGML tensor types.
+
+### `llama.cpp-opentq`
+
+The native OpenTQ `llama.cpp` track optimizes for:
+
+- custom OpenTQ tensor payloads
+- bitstream parity with the Python quantizer
+- eventual upstreamability once CPU and Metal kernels are production-grade
+- robust prefill on long contexts after the custom kernels match stock GGUF throughput expectations
 
 ### `opentq-metal`
 
@@ -62,4 +75,3 @@ The Apple Silicon runtime optimizes for:
 - KV compression that is native to unified memory constraints
 - optional DFlash-style speculative decoding
 - prefix cache reuse and branch-friendly agentic workloads
-
