@@ -102,9 +102,42 @@ Runtime status:
 - OpenTQ tensor types are registered in the patched `llama.cpp` fork
 - GGUF metadata and custom typed tensor payloads are emitted by `opentq export-gguf`
 - CPU reference dequant / vec-dot paths are available for correctness and fallback
-- Metal builds with the patch; optimized compressed-domain Metal kernels remain a later performance pass
+- Metal builds with the patch and has a prototype FWHT matvec path, but it is not release-fast yet
 - Stock upstream `llama.cpp` remains unsupported until the patchset is upstreamed
 - Current GGUF export is text-only; vision tensors are intentionally skipped
+
+## Stage 4: quality and wall-clock gates
+
+The public GGUF releases must pass more than a one-token smoke test. The smoke gate proves only that metadata loading, tensor dispatch and bounded generation are functional. Release candidates also need small quality probes and long-context wall-clock benchmarks.
+
+Run the Qwen3.6-style quality sample suite:
+
+```bash
+./scripts/eval_qwen36_gguf_quality.sh
+```
+
+Run one release and one sample while debugging:
+
+```bash
+OPENTQ_RELEASES="Qwen3.6-27B-TQ3_SB4" \
+SAMPLE_ID="knowledge_capital_fr" \
+CTX_SIZE=256 \
+./scripts/eval_qwen36_gguf_quality.sh
+```
+
+Output:
+
+- `artifacts/qwen3.6-27b-eval/*.json`: per-sample output, score, latency and category pass rate
+- `benchmarks/qwen36_quality_samples.jsonl`: deterministic micro-suite covering knowledge, reasoning, coding, tool-style JSON and small needle retrieval
+
+Run the release wall-clock benchmark:
+
+```bash
+PROMPT_TOKENS=8192 GEN_TOKENS=128 NGL=99 FLASH_ATTN=on \
+./scripts/benchmark_llama_wallclock.sh artifacts/qwen3.6-27b-gguf/Qwen3.6-27B-TQ3_SB4/Qwen3.6-27B-TQ3_SB4.gguf
+```
+
+The Hugging Face GGUF staging command requires a passing validation JSON with the benchmark gate unless `--allow-smoke-validation` is explicitly used. Do not use that bypass for public releases.
 
 ## Recommended public release order
 

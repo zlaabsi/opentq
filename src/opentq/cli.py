@@ -15,6 +15,7 @@ from .hf_release import prepare_hf_release
 from .inventory import build_inventory, inventory_summary
 from .monitor import build_monitor_payload, print_monitor, watch_monitor
 from .quantize import quantize_tensor
+from .quality_eval import GGUFQualityEvalOptions, run_quality_eval
 from .release_pack import pack_release
 from .recipes import get_recipe, recipe_markdown, recipe_to_dict
 from .run import build_release_plan, quantize_release
@@ -125,6 +126,22 @@ def build_parser() -> argparse.ArgumentParser:
     validate_gguf_parser.add_argument("--bench", action="store_true")
     validate_gguf_parser.add_argument("--bench-prompt-tokens", type=int, default=512)
     validate_gguf_parser.add_argument("--bench-gen-tokens", type=int, default=16)
+
+    eval_gguf_parser = sub.add_parser("eval-gguf", help="Run small quality samples against a GGUF artifact.")
+    eval_gguf_parser.add_argument("--gguf", required=True)
+    eval_gguf_parser.add_argument("--output", required=True)
+    eval_gguf_parser.add_argument("--suite", default="benchmarks/qwen36_quality_samples.jsonl")
+    eval_gguf_parser.add_argument("--llama-cpp", default="../llama.cpp")
+    eval_gguf_parser.add_argument("--ctx-size", type=int, default=2048)
+    eval_gguf_parser.add_argument("--ngl", default="99")
+    eval_gguf_parser.add_argument("--threads", type=int)
+    eval_gguf_parser.add_argument("--timeout", type=float, default=600.0)
+    eval_gguf_parser.add_argument("--flash-attn", default="on")
+    eval_gguf_parser.add_argument("--temperature", type=float, default=0.0)
+    eval_gguf_parser.add_argument("--top-p", type=float)
+    eval_gguf_parser.add_argument("--max-samples", type=int)
+    eval_gguf_parser.add_argument("--sample-id", action="append", default=[])
+    eval_gguf_parser.add_argument("--reference")
 
     return parser
 
@@ -382,6 +399,44 @@ def cmd_validate_gguf(
     return 0 if payload["overall_pass"] else 1
 
 
+def cmd_eval_gguf(
+    gguf: str,
+    output: str,
+    suite: str,
+    llama_cpp: str,
+    ctx_size: int,
+    ngl: str,
+    threads: int | None,
+    timeout: float,
+    flash_attn: str,
+    temperature: float,
+    top_p: float | None,
+    max_samples: int | None,
+    sample_ids: list[str],
+    reference: str | None,
+) -> int:
+    payload = run_quality_eval(
+        GGUFQualityEvalOptions(
+            gguf=Path(gguf),
+            output=Path(output),
+            suite=Path(suite),
+            llama_cpp_dir=Path(llama_cpp),
+            ctx_size=ctx_size,
+            gpu_layers=ngl,
+            threads=threads,
+            timeout_seconds=timeout,
+            flash_attn=flash_attn,
+            temperature=temperature,
+            top_p=top_p,
+            max_samples=max_samples,
+            sample_ids=tuple(sample_ids),
+            reference=Path(reference) if reference else None,
+        )
+    )
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["overall_pass"] else 1
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -452,6 +507,23 @@ def main() -> int:
             args.bench,
             args.bench_prompt_tokens,
             args.bench_gen_tokens,
+        )
+    if args.command == "eval-gguf":
+        return cmd_eval_gguf(
+            args.gguf,
+            args.output,
+            args.suite,
+            args.llama_cpp,
+            args.ctx_size,
+            args.ngl,
+            args.threads,
+            args.timeout,
+            args.flash_attn,
+            args.temperature,
+            args.top_p,
+            args.max_samples,
+            args.sample_id,
+            args.reference,
         )
     parser.error(f"unknown command: {args.command}")
     return 2
