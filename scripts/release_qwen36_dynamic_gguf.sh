@@ -155,11 +155,11 @@ for profile in $PROFILES; do
       --quality-eval "$quality"
 
   if [[ "$UPLOAD" == "1" ]]; then
-    echo "[$(timestamp)] hf repo create $repo_id --type model -y" | tee -a "$log"
-    hf repo create "$repo_id" --type model -y >>"$log" 2>&1 || {
+    echo "[$(timestamp)] hf repo create $repo_id --repo-type model --exist-ok" | tee -a "$log"
+    hf repo create "$repo_id" --repo-type model --exist-ok >>"$log" 2>&1 || {
       echo "[$(timestamp)] repo create returned non-zero; continuing in case the repo already exists: $repo_id" | tee -a "$log"
     }
-    run_logged "$log" hf upload-large-folder "$repo_id" "$stage"
+    run_logged "$log" hf upload-large-folder "$repo_id" "$stage" --repo-type model
   else
     echo "[$(timestamp)] upload disabled for $profile; staged at $stage" | tee -a "$log"
   fi

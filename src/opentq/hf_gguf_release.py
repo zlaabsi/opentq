@@ -244,7 +244,7 @@ def prepare_hf_gguf_release(
             "public_file": quality_public_name,
         },
         "upload": {
-            "large_folder": f"hf upload-large-folder {repo_id} {output}",
+            "large_folder": f"hf upload-large-folder {repo_id} {output} --repo-type model",
             "standard": f"hf upload {repo_id} {output} .",
         },
     }
