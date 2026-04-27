@@ -49,8 +49,8 @@ This initial commit gives you:
 
 What it does **not** do yet:
 
-- stock `llama.cpp` GGUF tensor emission
-- Metal kernels for the custom runtime
+- upstream stock `llama.cpp` support for OpenTQ tensor types
+- optimized Metal kernels for the custom runtime
 - model-wide calibration and tensor-role heuristics
 
 ## Quick start
@@ -66,7 +66,8 @@ uv run opentq release-plan --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2
 uv run opentq quantize-release --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2 --output artifacts/qwen36-tq4balv2 --max-tensors 8
 uv run opentq pack-release --input artifacts/qwen36-tq4balv2 --output artifacts/qwen36-tq4balv2-packed
 uv run opentq gguf-plan --packed artifacts/qwen36-tq4balv2-packed --output artifacts/qwen36-tq4balv2-packed/gguf-plan.json
-uv run opentq prepare-hf --packed artifacts/qwen36-tq4balv2-packed --output artifacts/hf/qwen36-tq4balv2 --repo-id zlaabsi/Qwen3.6-27B-TQ4_BAL_V2
+uv run opentq export-gguf --packed artifacts/qwen36-tq4balv2-packed --output artifacts/gguf/Qwen3.6-27B-TQ4_BAL_V2.gguf --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp
+uv run opentq prepare-hf-gguf --gguf artifacts/gguf/Qwen3.6-27B-TQ4_BAL_V2.gguf --output artifacts/hf-gguf/qwen36-tq4balv2 --repo-id zlaabsi/Qwen3.6-27B-TQ4_BAL_V2-GGUF
 ```
 
 For unattended overnight runs on Apple Silicon, launch the resumable Qwen3.6-27B batch with:
@@ -86,10 +87,13 @@ For the release path after quantization:
 
 ```bash
 ./scripts/pack_qwen36_releases.sh
-HF_USER=zlaabsi ./scripts/stage_qwen36_hf_releases.sh
+./scripts/launch_qwen36_gguf_exports.sh
+HF_USER=zlaabsi ./scripts/stage_qwen36_gguf_releases.sh
 ```
 
-See [inference-release-checklist.md](/Users/zlaabsi/Documents/GitHub/opentq/docs/inference-release-checklist.md) for the OpenTQ packed format, Hugging Face staging, and the remaining `llama.cpp` GGUF work.
+The OpenTQ `.otq` packs are private/research artifacts for now. Public Hugging Face releases should use the `*-GGUF` staging path and the patched `llama.cpp` runtime until the OpenTQ tensor types are upstreamed.
+
+See [inference-release-checklist.md](/Users/zlaabsi/Documents/GitHub/opentq/docs/inference-release-checklist.md) for the OpenTQ packed format, GGUF staging, and runtime validation flow.
 
 ## Repo layout
 

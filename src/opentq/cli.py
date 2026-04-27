@@ -8,6 +8,8 @@ import numpy as np
 
 from .hf import base_weight_size_gib, fetch_safetensors_index
 from .gguf import write_gguf_plan
+from .gguf_export import GGUFExportOptions, export_gguf
+from .hf_gguf_release import prepare_hf_gguf_release
 from .hf_release import prepare_hf_release
 from .inventory import build_inventory, inventory_summary
 from .monitor import build_monitor_payload, print_monitor, watch_monitor
@@ -85,6 +87,23 @@ def build_parser() -> argparse.ArgumentParser:
     gguf_plan = sub.add_parser("gguf-plan", help="Write the GGUF integration plan for a packed OpenTQ release.")
     gguf_plan.add_argument("--packed", required=True)
     gguf_plan.add_argument("--output", required=True)
+
+    gguf_export = sub.add_parser("export-gguf", help="Export a packed OpenTQ release to a llama.cpp GGUF container.")
+    gguf_export.add_argument("--packed", required=True)
+    gguf_export.add_argument("--output", required=True)
+    gguf_export.add_argument("--llama-cpp", default="../llama.cpp")
+    gguf_export.add_argument("--max-tensors", type=int)
+    gguf_export.add_argument("--include-vision", action="store_true")
+
+    hf_gguf_release_parser = sub.add_parser("prepare-hf-gguf", help="Create a Hugging Face staging folder from a GGUF artifact.")
+    hf_gguf_release_parser.add_argument("--gguf", required=True)
+    hf_gguf_release_parser.add_argument("--output", required=True)
+    hf_gguf_release_parser.add_argument("--repo-id", required=True)
+    hf_gguf_release_parser.add_argument("--base-model", default="Qwen/Qwen3.6-27B")
+    hf_gguf_release_parser.add_argument("--runtime-repo", default="https://github.com/zlaabsi/llama.cpp-opentq")
+    hf_gguf_release_parser.add_argument("--link-mode", choices=("hardlink", "copy", "symlink"), default="hardlink")
+    hf_gguf_release_parser.add_argument("--include-vision", action="store_true")
+    hf_gguf_release_parser.add_argument("--no-sha256", action="store_true")
 
     return parser
 
@@ -258,6 +277,44 @@ def cmd_gguf_plan(packed: str, output: str) -> int:
     return 0
 
 
+def cmd_export_gguf(packed: str, output: str, llama_cpp: str, max_tensors: int | None, include_vision: bool) -> int:
+    payload = export_gguf(
+        GGUFExportOptions(
+            packed_dir=Path(packed),
+            output=Path(output),
+            llama_cpp_dir=Path(llama_cpp),
+            text_only=not include_vision,
+            max_tensors=max_tensors,
+        )
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def cmd_prepare_hf_gguf(
+    gguf: str,
+    output: str,
+    repo_id: str,
+    base_model: str,
+    runtime_repo: str,
+    link_mode: str,
+    include_vision: bool,
+    no_sha256: bool,
+) -> int:
+    payload = prepare_hf_gguf_release(
+        gguf,
+        output,
+        repo_id,
+        base_model=base_model,
+        runtime_repo=runtime_repo,
+        link_mode=link_mode,
+        text_only=not include_vision,
+        compute_sha256=not no_sha256,
+    )
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -295,6 +352,19 @@ def main() -> int:
         return cmd_prepare_hf(args.packed, args.output, args.repo_id, args.link_mode)
     if args.command == "gguf-plan":
         return cmd_gguf_plan(args.packed, args.output)
+    if args.command == "export-gguf":
+        return cmd_export_gguf(args.packed, args.output, args.llama_cpp, args.max_tensors, args.include_vision)
+    if args.command == "prepare-hf-gguf":
+        return cmd_prepare_hf_gguf(
+            args.gguf,
+            args.output,
+            args.repo_id,
+            args.base_model,
+            args.runtime_repo,
+            args.link_mode,
+            args.include_vision,
+            args.no_sha256,
+        )
     parser.error(f"unknown command: {args.command}")
     return 2
 

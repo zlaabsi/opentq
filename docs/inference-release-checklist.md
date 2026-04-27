@@ -41,9 +41,11 @@ Packed payload details:
 - primary scales and residual scales are stored as `float16`
 - copied tensors are stored as `float16` by default
 
-## Stage 2: Hugging Face staging
+## Stage 2: private OpenTQ staging
 
-Prepare one staged repository folder:
+This stage is useful for internal testing only. Do not publish these folders yet.
+
+Prepare one staged OpenTQ repository folder:
 
 ```bash
 uv run python -m opentq.cli prepare-hf \
@@ -64,20 +66,45 @@ Upload a staged release:
 hf upload-large-folder zlaabsi/Qwen3.6-27B-TQ4_BAL_V2 artifacts/qwen3.6-27b-hf/Qwen3.6-27B-TQ4_BAL_V2
 ```
 
-## Stage 3: GGUF
+## Stage 3: GGUF public artifacts
 
-`gguf-plan.json` is not a runnable GGUF file. It is the bridge contract for the `llama.cpp` integration.
+`gguf-plan.json` is a bridge contract. Public releases should use real `.gguf` files generated from the packed OpenTQ payloads.
 
-Missing runtime work:
+Export one GGUF:
 
-- register `OPENTQ_*` tensor types in `ggml_type`
-- define type size and block size tables
-- implement CPU `dequantize_row` reference paths
-- implement Metal unpack/dequant kernels
-- write a GGUF emitter that embeds `.otq` payload sections as custom typed tensors
-- validate `opentq.*` metadata during load
+```bash
+uv run python -m opentq.cli export-gguf \
+  --packed artifacts/qwen3.6-27b-packed/Qwen3.6-27B-TQ4_BAL_V2 \
+  --output artifacts/qwen3.6-27b-gguf/Qwen3.6-27B-TQ4_BAL_V2/Qwen3.6-27B-TQ4_BAL_V2.gguf \
+  --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp
+```
 
-The GGUF output becomes publishable only after the loader can run the payload. Until then, Hugging Face releases should be labeled as OpenTQ packed releases, not stock `llama.cpp` GGUF releases.
+Export all GGUF releases in a detached session:
+
+```bash
+./scripts/launch_qwen36_gguf_exports.sh
+```
+
+Stage public Hugging Face GGUF folders:
+
+```bash
+HF_USER=zlaabsi ./scripts/stage_qwen36_gguf_releases.sh
+```
+
+Upload a staged GGUF release:
+
+```bash
+hf upload-large-folder zlaabsi/Qwen3.6-27B-TQ4_BAL_V2-GGUF artifacts/qwen3.6-27b-hf-gguf/Qwen3.6-27B-TQ4_BAL_V2
+```
+
+Runtime status:
+
+- OpenTQ tensor types are registered in the patched `llama.cpp` fork
+- GGUF metadata and custom typed tensor payloads are emitted by `opentq export-gguf`
+- CPU reference dequant / vec-dot paths are available for correctness and fallback
+- Metal builds with the patch; optimized compressed-domain Metal kernels remain a later performance pass
+- Stock upstream `llama.cpp` remains unsupported until the patchset is upstreamed
+- Current GGUF export is text-only; vision tensors are intentionally skipped
 
 ## Recommended public release order
 

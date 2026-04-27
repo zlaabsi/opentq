@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from .bitpack import pack_bits
+from .run import tensor_seed
 from .variants import get_variant
 
 
@@ -174,6 +175,7 @@ def pack_release(source: str | Path, output: str | Path, *, force: bool = False,
                 "sha256": sha256_file(tensor_file),
                 "bytes": packed["bytes"],
                 "num_values": row["num_values"],
+                "seed": tensor_seed(manifest["release_slug"], row["name"]),
                 "layout": layout,
                 "sections": packed["sections"],
             }
