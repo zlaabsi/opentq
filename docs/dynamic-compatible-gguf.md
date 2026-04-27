@@ -52,6 +52,19 @@ Outputs:
 artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF/quantize.sh
 ```
 
+For the Qwen3.6-27B release path, use the guarded sequential runner instead. By default it converts the BF16 source GGUF if missing, runs only `OTQ-DYN-Q4_XL`, writes logs, performs a dry-run, quantizes, then smoke-validates:
+
+```bash
+./scripts/launch_qwen36_dynamic_ggufs.sh
+./scripts/status_qwen36_dynamic_ggufs.sh
+```
+
+To run more profiles later:
+
+```bash
+PROFILES="OTQ-DYN-Q3_XL OTQ-DYN-Q5_XL" ./scripts/launch_qwen36_dynamic_ggufs.sh
+```
+
 Run a dry-run first to get the real final GGUF size:
 
 ```bash
