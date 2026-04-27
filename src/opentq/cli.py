@@ -125,6 +125,8 @@ def build_parser() -> argparse.ArgumentParser:
     hf_gguf_release_parser.add_argument("--allow-smoke-validation", action="store_true")
     hf_gguf_release_parser.add_argument("--min-benchmark-prompt-tokens", type=int, default=8192)
     hf_gguf_release_parser.add_argument("--min-benchmark-gen-tokens", type=int, default=128)
+    hf_gguf_release_parser.add_argument("--stock-compatible", action="store_true")
+    hf_gguf_release_parser.add_argument("--quality-eval")
 
     validate_gguf_parser = sub.add_parser("validate-gguf", help="Run release-gating GGUF runtime checks.")
     validate_gguf_parser.add_argument("--gguf", required=True)
@@ -156,6 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_gguf_parser.add_argument("--max-samples", type=int)
     eval_gguf_parser.add_argument("--sample-id", action="append", default=[])
     eval_gguf_parser.add_argument("--reference")
+    eval_gguf_parser.add_argument("--prompt-format", choices=("raw", "qwen3-no-think"), default="raw")
 
     return parser
 
@@ -403,6 +406,8 @@ def cmd_prepare_hf_gguf(
     allow_smoke_validation: bool,
     min_benchmark_prompt_tokens: int,
     min_benchmark_gen_tokens: int,
+    stock_compatible: bool,
+    quality_eval: str | None,
 ) -> int:
     payload = prepare_hf_gguf_release(
         gguf,
@@ -418,6 +423,8 @@ def cmd_prepare_hf_gguf(
         require_benchmark=not allow_smoke_validation,
         min_benchmark_prompt_tokens=min_benchmark_prompt_tokens,
         min_benchmark_gen_tokens=min_benchmark_gen_tokens,
+        stock_compatible=stock_compatible,
+        quality_eval_path=quality_eval,
     )
     print(json.dumps(payload, indent=2))
     return 0
@@ -474,6 +481,7 @@ def cmd_eval_gguf(
     max_samples: int | None,
     sample_ids: list[str],
     reference: str | None,
+    prompt_format: str,
 ) -> int:
     payload = run_quality_eval(
         GGUFQualityEvalOptions(
@@ -491,6 +499,7 @@ def cmd_eval_gguf(
             max_samples=max_samples,
             sample_ids=tuple(sample_ids),
             reference=Path(reference) if reference else None,
+            prompt_format=prompt_format,
         )
     )
     print(json.dumps(payload, indent=2))
@@ -565,6 +574,8 @@ def main() -> int:
             args.allow_smoke_validation,
             args.min_benchmark_prompt_tokens,
             args.min_benchmark_gen_tokens,
+            args.stock_compatible,
+            args.quality_eval,
         )
     if args.command == "validate-gguf":
         return cmd_validate_gguf(
@@ -598,6 +609,7 @@ def main() -> int:
             args.max_samples,
             args.sample_id,
             args.reference,
+            args.prompt_format,
         )
     parser.error(f"unknown command: {args.command}")
     return 2

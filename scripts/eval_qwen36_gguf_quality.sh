@@ -16,6 +16,7 @@ FLASH_ATTN="${FLASH_ATTN:-on}"
 MAX_SAMPLES="${MAX_SAMPLES:-}"
 SAMPLE_ID="${SAMPLE_ID:-}"
 REFERENCE="${REFERENCE:-}"
+PROMPT_FORMAT="${PROMPT_FORMAT:-raw}"
 
 if [[ -n "${OPENTQ_RELEASES:-}" ]]; then
   read -r -a RELEASES <<<"$OPENTQ_RELEASES"
@@ -49,6 +50,7 @@ for release in "${RELEASES[@]}"; do
     --ctx-size "$CTX_SIZE"
     --timeout "$TIMEOUT"
     --flash-attn "$FLASH_ATTN"
+    --prompt-format "$PROMPT_FORMAT"
   )
   if [[ -n "$MAX_SAMPLES" ]]; then
     args+=(--max-samples "$MAX_SAMPLES")

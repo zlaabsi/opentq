@@ -47,6 +47,7 @@ class GGUFQualityEvalOptions:
     max_samples: int | None = None
     sample_ids: tuple[str, ...] = field(default_factory=tuple)
     reference: Path | None = None
+    prompt_format: str = "raw"
 
 
 def _load_suite(path: Path, max_samples: int | None, sample_ids: tuple[str, ...]) -> list[dict[str, Any]]:
@@ -99,6 +100,14 @@ def _sample_max_tokens(sample: dict[str, Any]) -> int:
     return value
 
 
+def format_prompt(prompt: str, prompt_format: str) -> str:
+    if prompt_format == "raw":
+        return prompt
+    if prompt_format == "qwen3-no-think":
+        return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    raise ValueError(f"unsupported prompt_format: {prompt_format}")
+
+
 def _generation_command(options: GGUFQualityEvalOptions, binary: Path, sample: dict[str, Any]) -> list[str]:
     command = [
         str(binary),
@@ -111,7 +120,7 @@ def _generation_command(options: GGUFQualityEvalOptions, binary: Path, sample: d
         "-n",
         str(_sample_max_tokens(sample)),
         "-p",
-        str(sample["prompt"]),
+        format_prompt(str(sample["prompt"]), options.prompt_format),
         "-fa",
         options.flash_attn,
         "-no-cnv",
@@ -298,6 +307,8 @@ def run_quality_eval(options: GGUFQualityEvalOptions) -> dict[str, Any]:
         raise ValueError(f"expected a .gguf artifact: {options.gguf}")
     if options.flash_attn not in {"on", "off", "auto", "1", "0"}:
         raise ValueError("flash_attn must be one of: on, off, auto, 1, 0")
+    if options.prompt_format not in {"raw", "qwen3-no-think"}:
+        raise ValueError("prompt_format must be one of: raw, qwen3-no-think")
 
     samples = _load_suite(options.suite, options.max_samples, options.sample_ids)
     bin_dir = options.llama_cpp_dir / "build" / "bin"
@@ -326,6 +337,7 @@ def run_quality_eval(options: GGUFQualityEvalOptions) -> dict[str, Any]:
             "threads": options.threads,
             "temperature": options.temperature,
             "top_p": options.top_p,
+            "prompt_format": options.prompt_format,
         },
         "summary": _summarize(results),
         "samples": results,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from opentq.quality_eval import GGUFQualityEvalOptions, run_quality_eval, score_output
+from opentq.quality_eval import GGUFQualityEvalOptions, format_prompt, run_quality_eval, score_output
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -31,6 +31,13 @@ def test_score_output_json_valid() -> None:
 
     assert score["passed"] is True
     assert score["parsed_type"] == "dict"
+
+
+def test_format_prompt_qwen3_no_think() -> None:
+    prompt = format_prompt("Return 26.", "qwen3-no-think")
+
+    assert prompt.startswith("<|im_start|>user\nReturn 26.<|im_end|>")
+    assert prompt.endswith("<|im_start|>assistant\n<think>\n\n</think>\n\n")
 
 
 def test_run_quality_eval_writes_payload(tmp_path: Path) -> None:
