@@ -461,6 +461,9 @@ def prepare_hf_gguf_release(
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     target_name = gguf_path.name
+    for stale_gguf in output.glob("*.gguf"):
+        if stale_gguf.name != target_name:
+            stale_gguf.unlink()
     link_file(gguf_path, output / target_name, link_mode)
     public_files = [target_name, "README.md", "opentq-gguf-release.json"]
     validation_public_name = None

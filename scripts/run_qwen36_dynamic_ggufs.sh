@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 export PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+source "$REPO_DIR/scripts/qwen36_dynamic_common.sh"
 
 LLAMA_CPP="${LLAMA_CPP:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
 HF_CACHE_ROOT="${HF_CACHE_ROOT:-/Users/zlaabsi/.cache/huggingface/hub/models--Qwen--Qwen3.6-27B}"
@@ -100,9 +101,10 @@ ensure_source_gguf
 for profile in $PROFILES; do
   slug="Qwen3.6-27B-${profile}-GGUF"
   out_dir="$OUT_ROOT/$slug"
-  target="$out_dir/Qwen3.6-27B-${profile}.gguf"
+  target="$out_dir/$(qwen36_dynamic_public_filename "$profile")"
   log="$LOG_ROOT/$slug.log"
   mkdir -p "$out_dir"
+  qwen36_dynamic_ensure_public_alias "$out_dir" "$profile"
 
   echo "[$(timestamp)] planning $profile" | tee -a "$log"
   uv run opentq dynamic-gguf-plan \

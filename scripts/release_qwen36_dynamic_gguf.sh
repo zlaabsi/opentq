@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 export PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+source "$REPO_DIR/scripts/qwen36_dynamic_common.sh"
 
 LLAMA_CPP="${LLAMA_CPP:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
 HF_USER="${HF_USER:-zlaabsi}"
@@ -31,6 +32,7 @@ MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-0}"
 UPLOAD="${UPLOAD:-1}"
 FORCE_QUALITY="${FORCE_QUALITY:-0}"
 FORCE_BENCH="${FORCE_BENCH:-0}"
+DELETE_LEGACY="${DELETE_LEGACY:-1}"
 
 mkdir -p "$VALIDATION_ROOT" "$EVAL_ROOT" "$HF_STAGE_ROOT" "$LOG_ROOT"
 
@@ -64,6 +66,29 @@ raise SystemExit(0 if payload.get("overall_pass") is True else 1)
 PY
 }
 
+json_passed_for_gguf() {
+  local file="$1"
+  local gguf="$2"
+  python - "$file" "$gguf" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+gguf = Path(sys.argv[2])
+if not path.exists() or path.stat().st_size == 0 or not gguf.exists():
+    raise SystemExit(1)
+payload = json.loads(path.read_text(encoding="utf-8"))
+artifact = payload.get("artifact") or {}
+passed = (
+    payload.get("overall_pass") is True
+    and artifact.get("filename") == gguf.name
+    and int(artifact.get("bytes", -1)) == gguf.stat().st_size
+)
+raise SystemExit(0 if passed else 1)
+PY
+}
+
 wait_for_smoke() {
   local profile="$1"
   local smoke="$2"
@@ -92,7 +117,9 @@ wait_for_smoke() {
 
 for profile in $PROFILES; do
   slug="Qwen3.6-27B-${profile}-GGUF"
-  gguf="$OUT_ROOT/$slug/Qwen3.6-27B-${profile}.gguf"
+  qwen36_dynamic_ensure_public_alias "$OUT_ROOT/$slug" "$profile"
+  gguf="$OUT_ROOT/$slug/$(qwen36_dynamic_public_filename "$profile")"
+  legacy_gguf_name="$(qwen36_dynamic_legacy_filename "$profile")"
   smoke="$VALIDATION_ROOT/$slug-smoke.json"
   release_bench="$VALIDATION_ROOT/$slug-release-bench.json"
   quality="$EVAL_ROOT/$slug-quality-qwen3-no-think.json"
@@ -109,7 +136,7 @@ for profile in $PROFILES; do
 
   wait_for_smoke "$profile" "$smoke" "$log"
 
-  if [[ "$FORCE_QUALITY" != "1" ]] && json_passed "$quality"; then
+  if [[ "$FORCE_QUALITY" != "1" ]] && json_passed_for_gguf "$quality" "$gguf"; then
     echo "[$(timestamp)] skip quality eval $profile (passed: $quality)" | tee -a "$log"
   else
     run_logged "$log" \
@@ -125,7 +152,7 @@ for profile in $PROFILES; do
         --prompt-format qwen3-no-think
   fi
 
-  if [[ "$FORCE_BENCH" != "1" ]] && json_passed "$release_bench"; then
+  if [[ "$FORCE_BENCH" != "1" ]] && json_passed_for_gguf "$release_bench" "$gguf"; then
     echo "[$(timestamp)] skip release bench $profile (passed: $release_bench)" | tee -a "$log"
   else
     run_logged "$log" \
@@ -160,6 +187,13 @@ for profile in $PROFILES; do
       echo "[$(timestamp)] repo create returned non-zero; continuing in case the repo already exists: $repo_id" | tee -a "$log"
     }
     run_logged "$log" hf upload-large-folder "$repo_id" "$stage" --repo-type model
+    if [[ "$DELETE_LEGACY" == "1" && "$legacy_gguf_name" != "$(basename "$gguf")" ]]; then
+      echo "[$(timestamp)] hf repo-files delete $repo_id $legacy_gguf_name --repo-type model" | tee -a "$log"
+      hf repo-files delete "$repo_id" "$legacy_gguf_name" --repo-type model \
+        --commit-message "Remove legacy GGUF filename" >>"$log" 2>&1 || {
+        echo "[$(timestamp)] legacy delete skipped or failed: $legacy_gguf_name" | tee -a "$log"
+      }
+    fi
   else
     echo "[$(timestamp)] upload disabled for $profile; staged at $stage" | tee -a "$log"
   fi
