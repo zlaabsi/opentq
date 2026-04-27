@@ -65,6 +65,19 @@ To run more profiles later:
 PROFILES="OTQ-DYN-Q3_XL OTQ-DYN-Q5_XL" ./scripts/launch_qwen36_dynamic_ggufs.sh
 ```
 
+After a profile has been quantized and smoke-tested, run the gated release pipeline. It waits for the smoke JSON from the quantization runner, then executes quality eval, long-context bench, HF staging, repo creation, and upload:
+
+```bash
+PROFILES="OTQ-DYN-Q3_XL" ./scripts/launch_qwen36_dynamic_release.sh
+./scripts/status_qwen36_dynamic_ggufs.sh
+```
+
+Disable upload for a local dry release:
+
+```bash
+UPLOAD=0 PROFILES="OTQ-DYN-Q3_XL" ./scripts/release_qwen36_dynamic_gguf.sh
+```
+
 Run a dry-run first to get the real final GGUF size:
 
 ```bash
