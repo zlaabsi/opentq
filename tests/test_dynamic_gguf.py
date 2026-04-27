@@ -11,7 +11,7 @@ from opentq.dynamic_gguf import (
 
 
 def test_dynamic_profile_applies_edge_and_periodic_overrides() -> None:
-    profile = get_dynamic_profile("OTQ-DYN-Q4_XL")
+    profile = get_dynamic_profile("OTQ-DYN-Q4_K_M")
 
     edge = resolve_dynamic_tensor_action(profile, "model.language_model.layers.0.mlp.down_proj.weight")
     middle = resolve_dynamic_tensor_action(profile, "model.language_model.layers.10.mlp.down_proj.weight")
@@ -25,7 +25,7 @@ def test_dynamic_profile_applies_edge_and_periodic_overrides() -> None:
 
 
 def test_dynamic_profile_keeps_stock_gguf_names_and_types() -> None:
-    profile = get_dynamic_profile("otq-dyn-q3-xl")
+    profile = get_dynamic_profile("otq-dyn-q3-k-m")
     weight_map = {
         "lm_head.weight": "model-00001.safetensors",
         "model.language_model.embed_tokens.weight": "model-00001.safetensors",
@@ -51,7 +51,7 @@ def test_dynamic_profile_keeps_stock_gguf_names_and_types() -> None:
 
 
 def test_tensor_type_file_uses_exact_regex_patterns() -> None:
-    profile = get_dynamic_profile("OTQ-DYN-Q4_XL")
+    profile = get_dynamic_profile("OTQ-DYN-Q4_K_M")
     weight_map = {
         "lm_head.weight": "model-00001.safetensors",
         "model.language_model.layers.3.self_attn.q_proj.weight": "model-00001.safetensors",

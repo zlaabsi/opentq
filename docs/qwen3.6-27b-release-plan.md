@@ -22,10 +22,9 @@ This is the model-specific execution plan for `Qwen/Qwen3.6-27B`.
 | 6 | `Qwen3.6-27B-TQ2_0` | uniform | `~9.6-9.8 GiB` | aggressive memory floor |
 | 7 | `Qwen3.6-27B-TQ4R4` | residual | `~38.6-39.0 GiB` | near-lossless reference |
 | 8 | `Qwen3.6-27B-TQ1_0` | uniform | `~6.3-6.6 GiB` | research lower bound |
-| 9 | `Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF` | dynamic-compatible | dry-run required | primary stock llama.cpp public candidate |
-| 10 | `Qwen3.6-27B-OTQ-DYN-Q3_XL-GGUF` | dynamic-compatible | dry-run required | compact stock llama.cpp candidate |
-| 11 | `Qwen3.6-27B-OTQ-DYN-Q5_XL-GGUF` | dynamic-compatible | dry-run required | quality-first stock llama.cpp candidate |
-| 12 | `Qwen3.6-27B-OTQ-DYN-IQ4_NL-GGUF` | dynamic-compatible-imatrix | dry-run required | calibrated nonlinear 4-bit experiment |
+| 9 | `Qwen3.6-27B-OTQ-GGUF` | dynamic-compatible | staged from validated artifacts | canonical stock llama.cpp public repo with multiple GGUF files |
+| 10 | `Qwen3.6-27B-OTQ-Packed` | OpenTQ packed weights | pack manifest required | separate `.otq` OpenTQ/TurboQuant artifact repo |
+| 11 | `Qwen3.6-27B-OTQ-Metal-GGUF` | custom-runtime GGUF | runtime gate required | separate OpenTQ/Metal GGUF release track |
 
 ## Mixed flagship policy
 
@@ -81,4 +80,6 @@ See `docs/dynamic-compatible-gguf.md`.
 uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
 uv run opentq dynamic-gguf-profiles
+uv run python scripts/stage_qwen36_otq_gguf_repo.py
+uv run python scripts/stage_qwen36_otq_runtime_repos.py
 ```

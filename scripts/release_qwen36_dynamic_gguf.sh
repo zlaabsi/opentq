@@ -9,7 +9,7 @@ source "$REPO_DIR/scripts/qwen36_dynamic_common.sh"
 LLAMA_CPP="${LLAMA_CPP:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
 HF_USER="${HF_USER:-zlaabsi}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3.6-27B}"
-PROFILES="${PROFILES:-${PROFILE:-OTQ-DYN-Q3_XL}}"
+PROFILES="${PROFILES:-${PROFILE:-OTQ-DYN-Q3_K_M}}"
 
 OUT_ROOT="${OUT_ROOT:-artifacts/qwen3.6-27b-dynamic-gguf}"
 VALIDATION_ROOT="${VALIDATION_ROOT:-artifacts/qwen3.6-27b-dynamic-validation}"

@@ -118,8 +118,8 @@ class DynamicGGUFPlanOptions:
 
 
 QWEN36_DYNAMIC_PROFILES: dict[str, DynamicGGUFProfile] = {
-    "OTQ-DYN-Q3_XL": DynamicGGUFProfile(
-        name="OTQ-DYN-Q3_XL",
+    "OTQ-DYN-Q3_K_M": DynamicGGUFProfile(
+        name="OTQ-DYN-Q3_K_M",
         base_ftype="Q3_K_M",
         target="32 GB Apple Silicon compact stock-GGUF release",
         requires_imatrix=False,
@@ -140,8 +140,8 @@ QWEN36_DYNAMIC_PROFILES: dict[str, DynamicGGUFProfile] = {
         },
         notes="Aggressive stock-compatible profile: Q3 bulk MLP, Q4 attention, Q5/Q6 anchors.",
     ),
-    "OTQ-DYN-Q4_XL": DynamicGGUFProfile(
-        name="OTQ-DYN-Q4_XL",
+    "OTQ-DYN-Q4_K_M": DynamicGGUFProfile(
+        name="OTQ-DYN-Q4_K_M",
         base_ftype="Q4_K_M",
         target="primary public stock-GGUF release for 32 GB / 48 GB Macs",
         requires_imatrix=False,
@@ -164,8 +164,8 @@ QWEN36_DYNAMIC_PROFILES: dict[str, DynamicGGUFProfile] = {
         },
         notes="Balanced stock-compatible flagship: Q4 bulk MLP, Q5/Q6 attention, Q8 output head.",
     ),
-    "OTQ-DYN-Q5_XL": DynamicGGUFProfile(
-        name="OTQ-DYN-Q5_XL",
+    "OTQ-DYN-Q5_K_M": DynamicGGUFProfile(
+        name="OTQ-DYN-Q5_K_M",
         base_ftype="Q5_K_M",
         target="quality-first stock-GGUF release for 48 GB+ Macs",
         requires_imatrix=False,

@@ -133,7 +133,7 @@ QWEN36_27B_RECIPE = ModelRecipe(
             notes="Model-aware redesign that spends residual bits on attention and output-sensitive tensors while moving bulk MLP and linear-attention weights to TQ4_SB2.",
         ),
         ReleaseArtifact(
-            slug="Qwen3.6-27B-OTQ-DYN-Q3_XL-GGUF",
+            slug="Qwen3.6-27B-OTQ-DYN-Q3_K_M-GGUF",
             weight_profile="stock GGUF dynamic: Q3_K bulk MLP, Q4_K attention, Q5/Q6 anchors",
             profile_type="dynamic-compatible",
             target_size_gib="dry-run required from BF16 source GGUF",
@@ -144,7 +144,7 @@ QWEN36_27B_RECIPE = ModelRecipe(
             notes="No custom OpenTQ tensor type. Uses llama-quantize tensor-type-file allocation over standard GGML quant types.",
         ),
         ReleaseArtifact(
-            slug="Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF",
+            slug="Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF",
             weight_profile="stock GGUF dynamic: Q4_K bulk MLP, Q5/Q6 attention, Q8 output head",
             profile_type="dynamic-compatible",
             target_size_gib="dry-run required from BF16 source GGUF",
@@ -155,7 +155,7 @@ QWEN36_27B_RECIPE = ModelRecipe(
             notes="Compatibility-first release track that can be published before native OpenTQ runtime is production-grade.",
         ),
         ReleaseArtifact(
-            slug="Qwen3.6-27B-OTQ-DYN-Q5_XL-GGUF",
+            slug="Qwen3.6-27B-OTQ-DYN-Q5_K_M-GGUF",
             weight_profile="stock GGUF dynamic: Q5_K bulk MLP, Q6/Q8 attention and anchors",
             profile_type="dynamic-compatible",
             target_size_gib="dry-run required from BF16 source GGUF",

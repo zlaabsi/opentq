@@ -3,9 +3,9 @@
 qwen36_dynamic_quant_suffix() {
   local profile="$1"
   case "$profile" in
-    OTQ-DYN-Q3_XL) echo "Q3_K_M" ;;
-    OTQ-DYN-Q4_XL) echo "Q4_K_M" ;;
-    OTQ-DYN-Q5_XL) echo "Q5_K_M" ;;
+    OTQ-DYN-Q3_K_M) echo "Q3_K_M" ;;
+    OTQ-DYN-Q4_K_M) echo "Q4_K_M" ;;
+    OTQ-DYN-Q5_K_M) echo "Q5_K_M" ;;
     OTQ-DYN-IQ4_NL) echo "IQ4_NL" ;;
     *) echo "$profile" ;;
   esac
@@ -15,7 +15,7 @@ qwen36_dynamic_public_filename() {
   local profile="$1"
   local quant
   quant="$(qwen36_dynamic_quant_suffix "$profile")"
-  echo "Qwen3.6-27B-${profile}-${quant}.gguf"
+  echo "Qwen3.6-27B-OTQ-DYN-${quant}.gguf"
 }
 
 qwen36_dynamic_legacy_filename() {

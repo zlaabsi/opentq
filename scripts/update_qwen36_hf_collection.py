@@ -10,12 +10,8 @@ from huggingface_hub import HfApi
 
 DEFAULT_ITEMS = [
     {
-        "repo_id": "zlaabsi/Qwen3.6-27B-OTQ-DYN-Q3_XL-GGUF",
-        "note": "Compact 13.48 GiB / 14.5 GB. Best first pick for 32 GB Apple Silicon.",
-    },
-    {
-        "repo_id": "zlaabsi/Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF",
-        "note": "Balanced 16.82 GiB / 18.1 GB. Quality-balanced profile for 32-48 GB+ Apple Silicon.",
+        "repo_id": "zlaabsi/Qwen3.6-27B-OTQ-GGUF",
+        "note": "Canonical OpenTQ TurboQuant dynamic-compatible GGUF repo with Q3_K_M and Q4_K_M variants.",
     },
 ]
 
@@ -26,7 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--title", default="OpenTQ Qwen3.6 GGUF Releases")
     parser.add_argument(
         "--description",
-        default="OpenTQ dynamic-compatible Qwen3.6-27B GGUFs for stock llama.cpp on Apple Silicon.",
+        default="OpenTQ TurboQuant dynamic-compatible Qwen3.6-27B GGUFs for stock llama.cpp on Apple Silicon.",
         help="Hugging Face currently enforces a short collection description.",
     )
     parser.add_argument("--theme", default="blue")
@@ -56,6 +52,11 @@ def main() -> int:
             note=item["note"],
             exists_ok=True,
         )
+    desired = {item["repo_id"] for item in DEFAULT_ITEMS}
+    for item in list(collection.items):
+        if item.item_id not in desired:
+            api.delete_collection_item(collection.slug, item.item_object_id, missing_ok=True)
+    collection = api.get_collection(collection.slug)
 
     payload = {
         "slug": collection.slug,

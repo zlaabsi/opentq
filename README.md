@@ -64,7 +64,7 @@ uv run opentq quantize weights.npy --variant TQ3_SB4 --output artifacts/q_proj
 uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
 uv run opentq dynamic-gguf-profiles
-uv run opentq dynamic-gguf-plan --profile OTQ-DYN-Q4_XL --output artifacts/qwen36-otq-dyn-q4-xl --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp
+uv run opentq dynamic-gguf-plan --profile OTQ-DYN-Q4_K_M --output artifacts/qwen36-otq-dyn-q4-k-m --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp
 ./scripts/launch_qwen36_dynamic_ggufs.sh
 ./scripts/status_qwen36_dynamic_ggufs.sh
 uv run opentq release-plan --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2
@@ -96,7 +96,7 @@ For the release path after quantization:
 HF_USER=zlaabsi ./scripts/stage_qwen36_gguf_releases.sh
 ```
 
-The OpenTQ `.otq` packs are private/research artifacts for now. Public Hugging Face releases should prioritize dynamic-compatible `OTQ-DYN-*-GGUF` artifacts when stock llama.cpp compatibility is required. Native `TQ*` GGUF artifacts remain tied to `llama.cpp-opentq` until the custom tensor types and Metal kernels are release-grade.
+The OpenTQ `.otq` packs are the `OTQ-Packed` release track. Public stock-compatible Hugging Face releases should use `Qwen3.6-27B-OTQ-GGUF`; custom OpenTQ GGUF artifacts remain tied to `llama.cpp-opentq` and belong in the `OTQ-Metal-GGUF` track once the custom tensor types and Metal kernels are release-grade.
 
 See [inference-release-checklist.md](/Users/zlaabsi/Documents/GitHub/opentq/docs/inference-release-checklist.md) for the OpenTQ packed format, GGUF staging, and runtime validation flow.
 See [dynamic-compatible-gguf.md](/Users/zlaabsi/Documents/GitHub/opentq/docs/dynamic-compatible-gguf.md) for the stock-compatible GGUF path.

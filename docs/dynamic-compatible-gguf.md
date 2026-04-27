@@ -2,7 +2,7 @@
 
 This track is deliberately separate from native OpenTQ.
 
-Native OpenTQ GGUFs store custom `OPENTQ_*` tensor payloads and require `llama.cpp-opentq`. Dynamic-compatible GGUFs store only standard llama.cpp tensor types (`Q3_K`, `Q4_K`, `Q5_K`, `Q6_K`, `Q8_0`, `IQ4_NL`, `F16`, etc.). The “OpenTQ” part is the allocation policy and validation harness, not a new runtime format.
+Custom-runtime OpenTQ GGUFs store custom `OPENTQ_*` tensor payloads and require `llama.cpp-opentq`. Dynamic-compatible GGUFs store only standard llama.cpp tensor types (`Q3_K`, `Q4_K`, `Q5_K`, `Q6_K`, `Q8_0`, `IQ4_NL`, `F16`, etc.). The “OpenTQ” part is the allocation policy and validation harness, not a new runtime format.
 
 ## Why this exists
 
@@ -17,9 +17,9 @@ The tradeoff is clear:
 
 | Profile | Base ftype | Intent | Allocation summary |
 | --- | --- | --- | --- |
-| `OTQ-DYN-Q3_XL` | `Q3_K_M` | compact 32 GB candidate | Q3 bulk MLP, Q4 attention, Q5/Q6 anchors |
-| `OTQ-DYN-Q4_XL` | `Q4_K_M` | primary public stock-GGUF candidate | Q4 bulk MLP, Q5/Q6 attention, Q8 output head |
-| `OTQ-DYN-Q5_XL` | `Q5_K_M` | quality-first stock-GGUF baseline | Q5 bulk MLP, Q6/Q8 attention and anchors |
+| `OTQ-DYN-Q3_K_M` | `Q3_K_M` | compact 32 GB candidate | Q3 bulk MLP, Q4 attention, Q5/Q6 anchors |
+| `OTQ-DYN-Q4_K_M` | `Q4_K_M` | primary public stock-GGUF candidate | Q4 bulk MLP, Q5/Q6 attention, Q8 output head |
+| `OTQ-DYN-Q5_K_M` | `Q5_K_M` | quality-first stock-GGUF baseline | Q5 bulk MLP, Q6/Q8 attention and anchors |
 | `OTQ-DYN-IQ4_NL` | `IQ4_NL` | calibrated nonlinear 4-bit experiment | IQ4_NL bulk MLP, Q5/Q6/Q8 anchors; imatrix required |
 
 Each profile also promotes first/last layers and periodic attention anchors. That is the current OpenTQ dynamic policy. Later calibration can replace these heuristics with measured KLD/per-layer sensitivity.
@@ -32,11 +32,11 @@ cd /Users/zlaabsi/Documents/GitHub/opentq
 uv run opentq dynamic-gguf-profiles
 
 uv run opentq dynamic-gguf-plan \
-  --profile OTQ-DYN-Q4_XL \
-  --output artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF \
+  --profile OTQ-DYN-Q4_K_M \
+  --output artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF \
   --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp \
   --source-gguf artifacts/qwen3.6-27b-source/Qwen3.6-27B-BF16.gguf \
-  --target-gguf artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_XL.gguf
+  --target-gguf artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf
 ```
 
 Outputs:
@@ -49,10 +49,10 @@ Outputs:
 ## Quantize
 
 ```bash
-artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF/quantize.sh
+artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF/quantize.sh
 ```
 
-For the Qwen3.6-27B release path, use the guarded sequential runner instead. By default it converts the BF16 source GGUF if missing, runs only `OTQ-DYN-Q4_XL`, writes logs, performs a dry-run, quantizes, then smoke-validates:
+For the Qwen3.6-27B release path, use the guarded sequential runner instead. By default it converts the BF16 source GGUF if missing, runs only `OTQ-DYN-Q4_K_M`, writes logs, performs a dry-run, quantizes, then smoke-validates:
 
 ```bash
 ./scripts/launch_qwen36_dynamic_ggufs.sh
@@ -62,32 +62,32 @@ For the Qwen3.6-27B release path, use the guarded sequential runner instead. By 
 To run more profiles later:
 
 ```bash
-PROFILES="OTQ-DYN-Q3_XL OTQ-DYN-Q5_XL" ./scripts/launch_qwen36_dynamic_ggufs.sh
+PROFILES="OTQ-DYN-Q3_K_M OTQ-DYN-Q5_K_M" ./scripts/launch_qwen36_dynamic_ggufs.sh
 ```
 
 After a profile has been quantized and smoke-tested, run the gated release pipeline. It waits for the smoke JSON from the quantization runner, then executes quality eval, long-context bench, HF staging, repo creation, and upload:
 
 ```bash
-PROFILES="OTQ-DYN-Q3_XL" ./scripts/launch_qwen36_dynamic_release.sh
+PROFILES="OTQ-DYN-Q3_K_M" ./scripts/launch_qwen36_dynamic_release.sh
 ./scripts/status_qwen36_dynamic_ggufs.sh
 ```
 
 Disable upload for a local dry release:
 
 ```bash
-UPLOAD=0 PROFILES="OTQ-DYN-Q3_XL" ./scripts/release_qwen36_dynamic_gguf.sh
+UPLOAD=0 PROFILES="OTQ-DYN-Q3_K_M" ./scripts/release_qwen36_dynamic_gguf.sh
 ```
 
 Force a quality or benchmark refresh after changing the gate:
 
 ```bash
-FORCE_QUALITY=1 FORCE_BENCH=1 PROFILES="OTQ-DYN-Q3_XL" ./scripts/launch_qwen36_dynamic_release.sh
+FORCE_QUALITY=1 FORCE_BENCH=1 PROFILES="OTQ-DYN-Q3_K_M" ./scripts/launch_qwen36_dynamic_release.sh
 ```
 
 Run a dry-run first to get the real final GGUF size:
 
 ```bash
-DRY_RUN=1 artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF/quantize.sh
+DRY_RUN=1 artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF/quantize.sh
 ```
 
 For `OTQ-DYN-IQ4_NL`, pass an imatrix:

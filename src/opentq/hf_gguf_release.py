@@ -29,35 +29,35 @@ def infer_variant_slug(path: Path) -> str:
 
 
 def _profile_payload(gguf_name: str) -> dict[str, str]:
-    if "OTQ-DYN-Q3_XL" in gguf_name:
+    if "OTQ-DYN-Q3_K_M" in gguf_name:
         return {
-            "profile": "OTQ-DYN-Q3_XL",
+            "profile": "OTQ-DYN-Q3_K_M",
             "title": "Compact Apple Silicon GGUF",
             "bit_class": "3-bit dynamic allocation",
             "positioning": "smallest public OpenTQ dynamic-compatible release; best first pick for 32 GB Macs",
             "allocation": "Q3_K bulk MLP, Q4_K linear-attention blocks, Q5_K attention anchors and promoted edge layers",
             "memory": "32 GB Apple Silicon target; validated on M1 Max at 8K context",
-            "tradeoff": "maximum memory headroom and fast prefill; lower precision than the Q4_XL release",
+            "tradeoff": "maximum memory headroom and fast prefill; lower precision than the Q4_K_M release",
         }
-    if "OTQ-DYN-Q4_XL" in gguf_name:
+    if "OTQ-DYN-Q4_K_M" in gguf_name:
         return {
-            "profile": "OTQ-DYN-Q4_XL",
+            "profile": "OTQ-DYN-Q4_K_M",
             "title": "Balanced Apple Silicon GGUF",
             "bit_class": "4-bit dynamic allocation",
             "positioning": "primary quality-balanced public OpenTQ dynamic-compatible release",
             "allocation": "Q4_K bulk MLP, Q5_K/Q6_K attention and critical anchors, Q8_0 output-sensitive tensors",
             "memory": "32 GB Apple Silicon feasible at moderate context; 48 GB+ preferred for heavier agent workloads",
-            "tradeoff": "better quality budget than Q3_XL; less memory headroom and slower 8K benchmark on M1 Max",
+            "tradeoff": "better quality budget than Q3_K_M; less memory headroom and slower 8K benchmark on M1 Max",
         }
-    if "OTQ-DYN-Q5_XL" in gguf_name:
+    if "OTQ-DYN-Q5_K_M" in gguf_name:
         return {
-            "profile": "OTQ-DYN-Q5_XL",
+            "profile": "OTQ-DYN-Q5_K_M",
             "title": "Quality-First Apple Silicon GGUF",
             "bit_class": "5-bit dynamic allocation",
             "positioning": "quality-first stock-GGUF candidate for larger-memory Macs",
             "allocation": "Q5_K bulk tensors with Q6_K/Q8_0 promoted attention and anchors",
             "memory": "48 GB+ Apple Silicon target",
-            "tradeoff": "quality headroom over Q4_XL; larger disk and memory footprint",
+            "tradeoff": "quality headroom over Q4_K_M; larger disk and memory footprint",
         }
     if "OTQ-DYN-IQ4_NL" in gguf_name:
         return {
@@ -212,17 +212,17 @@ def _plan_summary_table(plan: dict[str, Any] | None) -> str:
 def _family_table(current_profile: str) -> str:
     rows = [
         {
-            "profile": "OTQ-DYN-Q3_XL",
-            "repo": "zlaabsi/Qwen3.6-27B-OTQ-DYN-Q3_XL-GGUF",
-            "file": "Qwen3.6-27B-OTQ-DYN-Q3_XL-Q3_K_M.gguf",
+            "profile": "OTQ-DYN-Q3_K_M",
+            "repo": "zlaabsi/Qwen3.6-27B-OTQ-GGUF",
+            "file": "Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf",
             "size": "13.48 GiB / 14.5 GB",
             "target": "32 GB Apple Silicon compact",
             "role": "smallest public OpenTQ dynamic-compatible release",
         },
         {
-            "profile": "OTQ-DYN-Q4_XL",
-            "repo": "zlaabsi/Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF",
-            "file": "Qwen3.6-27B-OTQ-DYN-Q4_XL-Q4_K_M.gguf",
+            "profile": "OTQ-DYN-Q4_K_M",
+            "repo": "zlaabsi/Qwen3.6-27B-OTQ-GGUF",
+            "file": "Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf",
             "size": "16.82 GiB / 18.1 GB",
             "target": "32 GB moderate context; 48 GB+ preferred",
             "role": "quality-balanced public release",
@@ -722,9 +722,9 @@ hf download {repo_id} {gguf_file} --local-dir .
 
 | Machine class | Recommendation |
 | --- | --- |
-| 32 GB MacBook Pro / Mac Studio | Prefer `OTQ-DYN-Q3_XL` for headroom. `OTQ-DYN-Q4_XL` is usable at moderate context but leaves less memory for KV cache and apps. |
-| 48-64 GB Apple Silicon | Prefer `OTQ-DYN-Q4_XL` for quality-balanced local inference. |
-| 96 GB+ Apple Silicon | Use `OTQ-DYN-Q4_XL` for long-context stability; future Q5/IQ4 releases can target quality-first use. |
+| 32 GB MacBook Pro / Mac Studio | Prefer `OTQ-DYN-Q3_K_M` for headroom. `OTQ-DYN-Q4_K_M` is usable at moderate context but leaves less memory for KV cache and apps. |
+| 48-64 GB Apple Silicon | Prefer `OTQ-DYN-Q4_K_M` for quality-balanced local inference. |
+| 96 GB+ Apple Silicon | Use `OTQ-DYN-Q4_K_M` for long-context stability; future Q5/IQ4 releases can target quality-first use. |
 | Agent workloads with large system prompts/tools | Measure total wall-clock time. Decode-only tok/s hides prefill cost. |
 
 ## Release Gate

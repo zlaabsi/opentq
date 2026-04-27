@@ -8,7 +8,7 @@ source "$REPO_DIR/scripts/qwen36_dynamic_common.sh"
 LLAMA_CPP="${LLAMA_CPP:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
 BASE_GGUF="${BASE_GGUF:-artifacts/qwen3.6-27b-source/Qwen3.6-27B-BF16.gguf}"
 OUT_ROOT="${OUT_ROOT:-artifacts/qwen3.6-27b-dynamic-gguf}"
-PROFILES="${PROFILES:-OTQ-DYN-Q4_XL OTQ-DYN-Q3_XL OTQ-DYN-Q5_XL OTQ-DYN-IQ4_NL}"
+PROFILES="${PROFILES:-OTQ-DYN-Q4_K_M OTQ-DYN-Q3_K_M OTQ-DYN-Q5_K_M OTQ-DYN-IQ4_NL}"
 
 for profile in $PROFILES; do
   slug="Qwen3.6-27B-${profile}-GGUF"

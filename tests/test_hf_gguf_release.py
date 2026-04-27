@@ -71,7 +71,7 @@ def test_prepare_hf_gguf_release_blocks_unvalidated_artifacts(tmp_path: Path) ->
 
 
 def test_prepare_hf_gguf_release_supports_stock_compatible_dynamic(tmp_path: Path) -> None:
-    gguf = tmp_path / "Qwen3.6-27B-OTQ-DYN-Q4_XL.gguf"
+    gguf = tmp_path / "Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf"
     gguf.write_bytes(b"GGUF-dynamic")
     validation = tmp_path / "validation.json"
     validation.write_text(
@@ -115,7 +115,7 @@ def test_prepare_hf_gguf_release_supports_stock_compatible_dynamic(tmp_path: Pat
     summary = prepare_hf_gguf_release(
         gguf,
         tmp_path / "hf",
-        "zlaabsi/Qwen3.6-27B-OTQ-DYN-Q4_XL-GGUF",
+        "zlaabsi/Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF",
         link_mode="copy",
         compute_sha256=False,
         validation_path=validation,
