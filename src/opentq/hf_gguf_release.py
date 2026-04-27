@@ -6,7 +6,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from .hf_release import dump_json, human_gib, link_file
+from .gguf_validate import assert_validation_matches
+from .hf_release import dump_json, human_gib, link_file, load_json
 
 
 def sha256_file(path: Path, chunk_size: int = 32 * 1024 * 1024) -> str:
@@ -36,8 +37,11 @@ def gguf_model_card(
     gguf_sha256: str,
     runtime_repo: str,
     text_only: bool,
+    validation: dict[str, Any] | None,
 ) -> str:
     modality = "text-only" if text_only else "text + vision"
+    validation_status = "passed" if validation is not None else "not attached"
+    validation_created_at = validation.get("created_at", "unknown") if validation else "n/a"
     return f"""---
 base_model: {base_model}
 tags:
@@ -61,6 +65,12 @@ This is the public GGUF release for `{base_model}` using OpenTQ weight quantizat
 - Modality in this release: {modality}
 
 The OpenTQ `.otq` research packs are not part of this Hugging Face release. The published artifact is the GGUF file only.
+
+## Validation
+
+- Release gate: {validation_status}
+- Validation date: {validation_created_at}
+- Required checks: GGUF metadata read + bounded `llama-cli` generation
 
 ## File
 
@@ -110,12 +120,29 @@ def prepare_hf_gguf_release(
     link_mode: str = "hardlink",
     text_only: bool = True,
     compute_sha256: bool = True,
+    validation_path: str | Path | None = None,
+    require_validation: bool = True,
+    require_benchmark: bool = True,
+    min_benchmark_prompt_tokens: int = 8192,
+    min_benchmark_gen_tokens: int = 128,
 ) -> dict[str, Any]:
     gguf_path = Path(gguf)
     if not gguf_path.exists():
         raise FileNotFoundError(f"missing GGUF artifact: {gguf_path}")
     if gguf_path.suffix != ".gguf":
         raise ValueError(f"expected a .gguf artifact: {gguf_path}")
+    validation: dict[str, Any] | None = None
+    if validation_path is not None:
+        validation = load_json(Path(validation_path))
+        assert_validation_matches(
+            validation,
+            gguf_path,
+            require_benchmark=require_benchmark,
+            min_benchmark_prompt_tokens=min_benchmark_prompt_tokens,
+            min_benchmark_gen_tokens=min_benchmark_gen_tokens,
+        )
+    elif require_validation:
+        raise ValueError("missing required validation payload; pass validation_path or disable require_validation")
 
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -146,6 +173,16 @@ def prepare_hf_gguf_release(
             "public_files": [target_name, "README.md", "opentq-gguf-release.json"],
             "excluded_private_artifacts": ["*.otq", "opentq-pack.json"],
         },
+        "validation": {
+            "required": require_validation,
+            "benchmark_required": require_benchmark,
+            "min_benchmark_prompt_tokens": min_benchmark_prompt_tokens if require_benchmark else None,
+            "min_benchmark_gen_tokens": min_benchmark_gen_tokens if require_benchmark else None,
+            "attached": validation is not None,
+            "created_at": validation.get("created_at") if validation else None,
+            "overall_pass": validation.get("overall_pass") if validation else None,
+            "source": str(validation_path) if validation_path else None,
+        },
         "upload": {
             "large_folder": f"hf upload-large-folder {repo_id} {output}",
             "standard": f"hf upload {repo_id} {output} .",
@@ -161,6 +198,7 @@ def prepare_hf_gguf_release(
             gguf_sha256=digest,
             runtime_repo=runtime_repo,
             text_only=text_only,
+            validation=validation,
         ),
         encoding="utf-8",
     )

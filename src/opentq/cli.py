@@ -9,6 +9,7 @@ import numpy as np
 from .hf import base_weight_size_gib, fetch_safetensors_index
 from .gguf import write_gguf_plan
 from .gguf_export import GGUFExportOptions, export_gguf
+from .gguf_validate import GGUFValidationOptions, validate_gguf
 from .hf_gguf_release import prepare_hf_gguf_release
 from .hf_release import prepare_hf_release
 from .inventory import build_inventory, inventory_summary
@@ -104,6 +105,26 @@ def build_parser() -> argparse.ArgumentParser:
     hf_gguf_release_parser.add_argument("--link-mode", choices=("hardlink", "copy", "symlink"), default="hardlink")
     hf_gguf_release_parser.add_argument("--include-vision", action="store_true")
     hf_gguf_release_parser.add_argument("--no-sha256", action="store_true")
+    hf_gguf_release_parser.add_argument("--validation")
+    hf_gguf_release_parser.add_argument("--allow-unvalidated", action="store_true")
+    hf_gguf_release_parser.add_argument("--allow-smoke-validation", action="store_true")
+    hf_gguf_release_parser.add_argument("--min-benchmark-prompt-tokens", type=int, default=8192)
+    hf_gguf_release_parser.add_argument("--min-benchmark-gen-tokens", type=int, default=128)
+
+    validate_gguf_parser = sub.add_parser("validate-gguf", help="Run release-gating GGUF runtime checks.")
+    validate_gguf_parser.add_argument("--gguf", required=True)
+    validate_gguf_parser.add_argument("--output", required=True)
+    validate_gguf_parser.add_argument("--llama-cpp", default="../llama.cpp")
+    validate_gguf_parser.add_argument("--prompt", default="Write one short sentence about quantization.")
+    validate_gguf_parser.add_argument("--ctx-size", type=int, default=256)
+    validate_gguf_parser.add_argument("--n-predict", type=int, default=4)
+    validate_gguf_parser.add_argument("--ngl", default="0")
+    validate_gguf_parser.add_argument("--threads", type=int)
+    validate_gguf_parser.add_argument("--timeout", type=float, default=600.0)
+    validate_gguf_parser.add_argument("--flash-attn", default="off")
+    validate_gguf_parser.add_argument("--bench", action="store_true")
+    validate_gguf_parser.add_argument("--bench-prompt-tokens", type=int, default=512)
+    validate_gguf_parser.add_argument("--bench-gen-tokens", type=int, default=16)
 
     return parser
 
@@ -300,6 +321,11 @@ def cmd_prepare_hf_gguf(
     link_mode: str,
     include_vision: bool,
     no_sha256: bool,
+    validation: str | None,
+    allow_unvalidated: bool,
+    allow_smoke_validation: bool,
+    min_benchmark_prompt_tokens: int,
+    min_benchmark_gen_tokens: int,
 ) -> int:
     payload = prepare_hf_gguf_release(
         gguf,
@@ -310,9 +336,50 @@ def cmd_prepare_hf_gguf(
         link_mode=link_mode,
         text_only=not include_vision,
         compute_sha256=not no_sha256,
+        validation_path=validation,
+        require_validation=not allow_unvalidated,
+        require_benchmark=not allow_smoke_validation,
+        min_benchmark_prompt_tokens=min_benchmark_prompt_tokens,
+        min_benchmark_gen_tokens=min_benchmark_gen_tokens,
     )
     print(json.dumps(payload, indent=2))
     return 0
+
+
+def cmd_validate_gguf(
+    gguf: str,
+    output: str,
+    llama_cpp: str,
+    prompt: str,
+    ctx_size: int,
+    n_predict: int,
+    ngl: str,
+    threads: int | None,
+    timeout: float,
+    flash_attn: str,
+    bench: bool,
+    bench_prompt_tokens: int,
+    bench_gen_tokens: int,
+) -> int:
+    payload = validate_gguf(
+        GGUFValidationOptions(
+            gguf=Path(gguf),
+            output=Path(output),
+            llama_cpp_dir=Path(llama_cpp),
+            prompt=prompt,
+            ctx_size=ctx_size,
+            n_predict=n_predict,
+            gpu_layers=ngl,
+            threads=threads,
+            timeout_seconds=timeout,
+            flash_attn=flash_attn,
+            run_bench=bench,
+            bench_prompt_tokens=bench_prompt_tokens,
+            bench_gen_tokens=bench_gen_tokens,
+        )
+    )
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["overall_pass"] else 1
 
 
 def main() -> int:
@@ -364,6 +431,27 @@ def main() -> int:
             args.link_mode,
             args.include_vision,
             args.no_sha256,
+            args.validation,
+            args.allow_unvalidated,
+            args.allow_smoke_validation,
+            args.min_benchmark_prompt_tokens,
+            args.min_benchmark_gen_tokens,
+        )
+    if args.command == "validate-gguf":
+        return cmd_validate_gguf(
+            args.gguf,
+            args.output,
+            args.llama_cpp,
+            args.prompt,
+            args.ctx_size,
+            args.n_predict,
+            args.ngl,
+            args.threads,
+            args.timeout,
+            args.flash_attn,
+            args.bench,
+            args.bench_prompt_tokens,
+            args.bench_gen_tokens,
         )
     parser.error(f"unknown command: {args.command}")
     return 2
