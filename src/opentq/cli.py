@@ -159,6 +159,7 @@ def build_parser() -> argparse.ArgumentParser:
     eval_gguf_parser.add_argument("--sample-id", action="append", default=[])
     eval_gguf_parser.add_argument("--reference")
     eval_gguf_parser.add_argument("--prompt-format", choices=("raw", "qwen3-no-think"), default="raw")
+    eval_gguf_parser.add_argument("--ignore-eos", action="store_true")
 
     return parser
 
@@ -482,6 +483,7 @@ def cmd_eval_gguf(
     sample_ids: list[str],
     reference: str | None,
     prompt_format: str,
+    ignore_eos: bool,
 ) -> int:
     payload = run_quality_eval(
         GGUFQualityEvalOptions(
@@ -500,6 +502,7 @@ def cmd_eval_gguf(
             sample_ids=tuple(sample_ids),
             reference=Path(reference) if reference else None,
             prompt_format=prompt_format,
+            ignore_eos=ignore_eos,
         )
     )
     print(json.dumps(payload, indent=2))
@@ -610,6 +613,7 @@ def main() -> int:
             args.sample_id,
             args.reference,
             args.prompt_format,
+            args.ignore_eos,
         )
     parser.error(f"unknown command: {args.command}")
     return 2

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from opentq.quality_eval import GGUFQualityEvalOptions, format_prompt, run_quality_eval, score_output
+from opentq.quality_eval import GGUFQualityEvalOptions, clean_output_for_scoring, format_prompt, run_quality_eval, score_output
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -31,6 +31,49 @@ def test_score_output_json_valid() -> None:
 
     assert score["passed"] is True
     assert score["parsed_type"] == "dict"
+
+
+def test_score_output_json_contains() -> None:
+    sample = {
+        "id": "tool",
+        "scorer": "json_contains",
+        "expected": {"action": "search", "query": "metal"},
+    }
+
+    score = score_output(sample, '{"action":"search","query":"metal"}')
+
+    assert score["passed"] is True
+    assert score["missing_or_mismatched"] == {}
+
+
+def test_score_output_json_contains_strips_llama_cpp_eos_marker() -> None:
+    sample = {
+        "id": "tool",
+        "scorer": "json_contains",
+        "expected": {"action": "search", "query": "metal"},
+    }
+
+    score = score_output(sample, '{"action":"search","query":"metal"} [end of text]\n')
+
+    assert score["passed"] is True
+
+
+def test_score_output_json_contains_rejects_trailing_text() -> None:
+    sample = {
+        "id": "tool",
+        "scorer": "json_contains",
+        "expected": {"action": "search"},
+    }
+
+    score = score_output(sample, '{"action":"search"}\\n```json')
+
+    assert score["passed"] is False
+    assert "json_error" in score
+
+
+def test_clean_output_for_scoring_only_strips_terminal_marker() -> None:
+    assert clean_output_for_scoring("Paris [end of text]\n") == "Paris"
+    assert clean_output_for_scoring("Paris [end of text]\nextra") == "Paris [end of text]\nextra"
 
 
 def test_format_prompt_qwen3_no_think() -> None:

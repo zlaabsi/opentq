@@ -29,6 +29,8 @@ WAIT_FOR_SMOKE="${WAIT_FOR_SMOKE:-1}"
 WAIT_INTERVAL="${WAIT_INTERVAL:-60}"
 MAX_WAIT_SECONDS="${MAX_WAIT_SECONDS:-0}"
 UPLOAD="${UPLOAD:-1}"
+FORCE_QUALITY="${FORCE_QUALITY:-0}"
+FORCE_BENCH="${FORCE_BENCH:-0}"
 
 mkdir -p "$VALIDATION_ROOT" "$EVAL_ROOT" "$HF_STAGE_ROOT" "$LOG_ROOT"
 
@@ -107,7 +109,7 @@ for profile in $PROFILES; do
 
   wait_for_smoke "$profile" "$smoke" "$log"
 
-  if json_passed "$quality"; then
+  if [[ "$FORCE_QUALITY" != "1" ]] && json_passed "$quality"; then
     echo "[$(timestamp)] skip quality eval $profile (passed: $quality)" | tee -a "$log"
   else
     run_logged "$log" \
@@ -123,7 +125,7 @@ for profile in $PROFILES; do
         --prompt-format qwen3-no-think
   fi
 
-  if json_passed "$release_bench"; then
+  if [[ "$FORCE_BENCH" != "1" ]] && json_passed "$release_bench"; then
     echo "[$(timestamp)] skip release bench $profile (passed: $release_bench)" | tee -a "$log"
   else
     run_logged "$log" \

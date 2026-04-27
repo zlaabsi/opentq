@@ -48,6 +48,7 @@ class GGUFQualityEvalOptions:
     sample_ids: tuple[str, ...] = field(default_factory=tuple)
     reference: Path | None = None
     prompt_format: str = "raw"
+    ignore_eos: bool = False
 
 
 def _load_suite(path: Path, max_samples: int | None, sample_ids: tuple[str, ...]) -> list[dict[str, Any]]:
@@ -131,8 +132,9 @@ def _generation_command(options: GGUFQualityEvalOptions, binary: Path, sample: d
         "1",
         "--temp",
         str(options.temperature),
-        "--ignore-eos",
     ]
+    if options.ignore_eos:
+        command.append("--ignore-eos")
     if options.top_p is not None:
         command.extend(["--top-p", str(options.top_p)])
     if options.threads is not None:
@@ -147,10 +149,20 @@ def _expected_strings(sample: dict[str, Any]) -> list[str]:
     return [str(item) for item in expected]
 
 
+def clean_output_for_scoring(output: str) -> str:
+    cleaned = output.strip()
+    # llama.cpp renders special EOS markers in stdout. They are transport markers,
+    # not answer content, so strip only exact trailing markers before scoring.
+    for marker in ("[end of text]",):
+        while cleaned.endswith(marker):
+            cleaned = cleaned[: -len(marker)].strip()
+    return cleaned
+
+
 def score_output(sample: dict[str, Any], output: str) -> dict[str, Any]:
     scorer = str(sample.get("scorer", "contains")).lower()
     expected = _expected_strings(sample)
-    normalized_output = output.strip()
+    normalized_output = clean_output_for_scoring(output)
     lowered_output = normalized_output.lower()
 
     passed = False
@@ -170,6 +182,26 @@ def score_output(sample: dict[str, Any], output: str) -> dict[str, Any]:
             parsed = json.loads(normalized_output)
             passed = True
             detail["parsed_type"] = type(parsed).__name__
+        except json.JSONDecodeError as exc:
+            detail["json_error"] = str(exc)
+    elif scorer == "json_contains":
+        expected_map = sample.get("expected", {})
+        if not isinstance(expected_map, dict):
+            raise ValueError(f"sample {sample['id']} uses json_contains with non-object expected")
+        detail["expected"] = expected_map
+        try:
+            parsed = json.loads(normalized_output)
+            detail["parsed_type"] = type(parsed).__name__
+            if not isinstance(parsed, dict):
+                detail["json_error"] = "expected JSON object"
+            else:
+                missing_or_mismatched = {
+                    key: {"expected": value, "actual": parsed.get(key)}
+                    for key, value in expected_map.items()
+                    if parsed.get(key) != value
+                }
+                detail["missing_or_mismatched"] = missing_or_mismatched
+                passed = not missing_or_mismatched
         except json.JSONDecodeError as exc:
             detail["json_error"] = str(exc)
     else:
@@ -338,6 +370,7 @@ def run_quality_eval(options: GGUFQualityEvalOptions) -> dict[str, Any]:
             "temperature": options.temperature,
             "top_p": options.top_p,
             "prompt_format": options.prompt_format,
+            "ignore_eos": options.ignore_eos,
         },
         "summary": _summarize(results),
         "samples": results,

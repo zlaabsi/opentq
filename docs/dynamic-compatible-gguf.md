@@ -78,6 +78,12 @@ Disable upload for a local dry release:
 UPLOAD=0 PROFILES="OTQ-DYN-Q3_XL" ./scripts/release_qwen36_dynamic_gguf.sh
 ```
 
+Force a quality or benchmark refresh after changing the gate:
+
+```bash
+FORCE_QUALITY=1 FORCE_BENCH=1 PROFILES="OTQ-DYN-Q3_XL" ./scripts/launch_qwen36_dynamic_release.sh
+```
+
 Run a dry-run first to get the real final GGUF size:
 
 ```bash
