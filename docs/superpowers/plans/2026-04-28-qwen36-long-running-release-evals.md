@@ -784,7 +784,7 @@ Result:
 artifacts/release-audit/qwen36-final-release-report.md
 ```
 
-The report records commit `127c2519e583c98e4e2665bce10ca3c13f328afb`, the current remote HF inventory, Q5 local runtime evidence, cleanup decisions, and remaining manual blockers.
+The report records the pushed `main` commit, the current remote HF inventory, Q5 local runtime evidence, cleanup decisions, and remaining manual blockers.
 
 ## Resume Commands
 
