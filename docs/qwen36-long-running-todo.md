@@ -27,8 +27,10 @@ This is the operational checklist for the Qwen3.6-27B release/evaluation run. Th
 - [x] Phase 1: Refresh artifact audit, M1 Max 32GB runtime gates, canonical GGUF staging, and naming checks.
 - [x] Phase 2: Re-run deterministic OTQ micro-evals and rebuild GGUF benchmark plots/CSVs.
 - [x] Phase 3: Add `scripts/run_qwen36_benchmark_subsets.py` dry-run planner plus tests for the benchmark matrix.
-- [ ] Phase 4: Implement benchmark adapters, then run quick OTQ benchmark subsets for Q3 and Q4 across the requested benchmark families.
-- [ ] Phase 5: Add degradation report builder and produce `artifacts/qwen3.6-27b-degradation-report/`.
+- [x] Phase 4a: Implement real benchmark adapters with pinned dataset, split, revision, task ids, prompt format, and scoring rule.
+- [ ] Phase 4b: Run quick OTQ benchmark subsets for Q3 and Q4 across the requested benchmark families.
+- [x] Phase 5a: Add degradation report builder with no-fake-delta gates.
+- [ ] Phase 5b: Produce final degradation report after Q3/Q4 subset JSONs exist.
 - [ ] Phase 6: Decide whether Q5_K_M can be generated; skip if free disk is below `80 GiB`.
 - [ ] Phase 7: Re-stage and gate `Qwen3.6-27B-OTQ-Packed`; upload only with `HF_UPLOAD=1` and runtime evidence.
 - [ ] Phase 8: Re-stage and gate `Qwen3.6-27B-OTQ-Metal-GGUF`; upload only with `HF_UPLOAD=1` and runtime evidence.
