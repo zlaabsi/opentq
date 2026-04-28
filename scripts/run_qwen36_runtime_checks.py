@@ -15,6 +15,7 @@ class RuntimeConfig:
     threads: int = 8
     ctx_size: int = 8192
     predict: int = 64
+    timeout_seconds: int = 600
 
 
 def build_cli_command(model: Path, prompt: str, config: RuntimeConfig) -> list[str]:
@@ -60,11 +61,24 @@ def write_runtime_result(output: Path, payload: dict[str, Any]) -> None:
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def run_command(command: list[str]) -> dict[str, Any]:
-    completed = subprocess.run(command, text=True, capture_output=True, check=False)
+def run_command(command: list[str], timeout_seconds: int) -> dict[str, Any]:
+    try:
+        completed = subprocess.run(command, text=True, capture_output=True, check=False, timeout=timeout_seconds)
+    except subprocess.TimeoutExpired as exc:
+        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
+        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
+        return {
+            "command": command,
+            "returncode": -1,
+            "timed_out": True,
+            "timeout_seconds": timeout_seconds,
+            "stdout_tail": stdout[-4000:],
+            "stderr_tail": stderr[-4000:],
+        }
     return {
         "command": command,
         "returncode": completed.returncode,
+        "timed_out": False,
         "stdout_tail": completed.stdout[-4000:],
         "stderr_tail": completed.stderr[-4000:],
     }
@@ -80,11 +94,18 @@ def main() -> None:
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--ctx-size", type=int, default=8192)
     parser.add_argument("--predict", type=int, default=64)
+    parser.add_argument("--timeout-seconds", type=int, default=600)
     args = parser.parse_args()
 
-    config = RuntimeConfig(llama_cpp=args.llama_cpp, threads=args.threads, ctx_size=args.ctx_size, predict=args.predict)
-    cli_result = run_command(build_cli_command(args.model, args.prompt, config))
-    bench_result = run_command(build_bench_command(args.model, config))
+    config = RuntimeConfig(
+        llama_cpp=args.llama_cpp,
+        threads=args.threads,
+        ctx_size=args.ctx_size,
+        predict=args.predict,
+        timeout_seconds=args.timeout_seconds,
+    )
+    cli_result = run_command(build_cli_command(args.model, args.prompt, config), config.timeout_seconds)
+    bench_result = run_command(build_bench_command(args.model, config), config.timeout_seconds)
     payload = {
         "model": str(args.model),
         "machine": args.machine,

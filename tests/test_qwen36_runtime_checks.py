@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
-from scripts.run_qwen36_runtime_checks import RuntimeConfig, build_bench_command, build_cli_command, write_runtime_result
+from scripts.run_qwen36_runtime_checks import RuntimeConfig, build_bench_command, build_cli_command, run_command, write_runtime_result
 
 
 def test_build_cli_command_uses_metal_fa_and_prompt(tmp_path: Path) -> None:
@@ -60,3 +61,11 @@ def test_write_runtime_result_records_evidence(tmp_path: Path) -> None:
         "machine": "M1 Max 32GB",
         "bounded_generation_passed": True,
     }
+
+
+def test_run_command_records_timeout() -> None:
+    result = run_command([sys.executable, "-c", "import time; time.sleep(2)"], timeout_seconds=1)
+
+    assert result["returncode"] == -1
+    assert result["timed_out"] is True
+    assert result["timeout_seconds"] == 1
