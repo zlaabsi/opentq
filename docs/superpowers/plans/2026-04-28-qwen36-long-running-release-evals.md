@@ -8,6 +8,17 @@
 
 **Tech Stack:** Python/uv, llama.cpp `llama-cli` and `llama-bench`, Hugging Face Hub CLI, OpenTQ CLI, JSONL benchmark suites, local Apple Silicon Metal runtime checks, optional external benchmark harnesses only behind explicit flags.
 
+## Current Status 2026-04-28 23:38 CEST
+
+- GitHub `main` is pushed through `30f11f2`.
+- Phase 4 benchmark adapters are implemented in `scripts/run_qwen36_benchmark_subsets.py` for MMLU, MMLU-Pro, ARC, HellaSwag, GSM8K, MATH, AIME, HumanEval, MBPP, BBH, GPQA, IFEval, TruthfulQA, WinoGrande, DROP, PIQA, and CommonsenseQA.
+- The practical Q3/Q4 local GGUF subset run is complete at `artifacts/qwen3.6-27b-benchmark-subsets-practical`, with 68 samples per model.
+- Practical mini-subset totals: Q3 `39/68` (`57.4%`), Q4 `39/68` (`57.4%`).
+- The practical report is generated at `artifacts/qwen3.6-27b-degradation-report-practical/degradation-report.md`. It labels official-baseline comparisons as candidates requiring review and labels non-official rows as OTQ-only unless a BF16 mini sidecar exists.
+- No Hugging Face upload was performed in this phase. Keep upload gated on explicit `HF_UPLOAD=1` or a direct upload instruction.
+- No deletion was performed. Free disk is about `10 GiB`; `hf cache scan --dir ~/.cache/huggingface/hub` reports `Qwen/Qwen3.6-27B` at `55.6G` and the Xet cache is about `4.7G`. Cleanup still requires manifest review plus explicit deletion enablement.
+- Remaining quality gates: SWE-bench and LiveCodeBench need real harness adapters; judge-based MT-Bench, Chatbot Arena, and AlpacaEval need pinned judge setup; MMMU and MathVista remain blocked for the current text-only GGUF release.
+
 ---
 
 ## Operating Rules
