@@ -637,7 +637,6 @@ Run:
 
 ```bash
 uv run python scripts/build_qwen36_cleanup_manifest.py \
-  --root /Users/zlaabsi/Documents/GitHub/opentq \
   --output artifacts/release-audit/qwen36-cleanup-manifest.json
 ```
 
@@ -657,8 +656,8 @@ import json
 from pathlib import Path
 p = Path("artifacts/release-audit/qwen36-cleanup-manifest.json")
 d = json.loads(p.read_text())
-for item in d.get("candidates", []):
-    print(item.get("decision"), item.get("gib"), item.get("path"))
+for item in d:
+    print(item.get("classification"), round(item.get("bytes", 0) / 1024**3, 2), item.get("path"))
 PY
 ```
 
@@ -670,19 +669,16 @@ Every large path is printed with a decision.
 
 - [ ] **Step 9.3: Delete only release-verified paths with explicit opt-in**
 
-Run only when the manifest marks a path `release_verified`, the HF release has been checked, and `ALLOW_DELETE=1` is set:
+Run only when the manifest has been manually reviewed, the HF release has been checked, and `ALLOW_DELETE=1` is set:
 
 ```bash
-ALLOW_DELETE=1 uv run python scripts/build_qwen36_cleanup_manifest.py \
-  --root /Users/zlaabsi/Documents/GitHub/opentq \
-  --output artifacts/release-audit/qwen36-cleanup-manifest.json \
-  --execute
+ALLOW_DELETE=1 rm -ri <reviewed-release-verified-path>
 ```
 
 Expected:
 
 ```text
-Only release-verified paths are removed.
+Only reviewed release-verified paths are removed.
 ```
 
 Stop before running if any selected path contains the only local copy of an unpublished artifact.
