@@ -7,6 +7,7 @@ from pathlib import Path
 from scripts.run_qwen36_benchmark_subsets import (
     ADAPTERS,
     build_sample_from_row,
+    apply_max_tokens,
     generation_binary,
     generation_command,
     ModelTarget,
@@ -232,3 +233,12 @@ def test_generation_command_prefers_llama_completion(tmp_path: Path) -> None:
     assert command[0] == str(completion)
     assert "-no-cnv" in command
     assert "--no-display-prompt" in command
+
+
+def test_apply_max_tokens_caps_long_samples() -> None:
+    sample = {"max_tokens": 4096}
+
+    capped = apply_max_tokens(sample, 512)
+
+    assert capped["max_tokens"] == 512
+    assert sample["max_tokens"] == 4096

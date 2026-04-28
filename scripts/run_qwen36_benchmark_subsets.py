@@ -647,6 +647,14 @@ def samples_for_adapter(adapter: BenchmarkAdapter, max_samples: int | None = Non
     return samples
 
 
+def apply_max_tokens(sample: dict[str, Any], max_tokens: int | None) -> dict[str, Any]:
+    if max_tokens is None:
+        return dict(sample)
+    capped = dict(sample)
+    capped["max_tokens"] = min(int(capped["max_tokens"]), max_tokens)
+    return capped
+
+
 def generation_command(model: ModelTarget, llama_cpp: Path, sample: dict[str, Any], timeout_seconds: int) -> list[str]:
     _ = timeout_seconds
     return [
@@ -717,12 +725,13 @@ def run_model_benchmarks(
     output_root: Path,
     llama_cpp: Path,
     max_samples: int | None,
+    max_tokens: int | None,
     timeout_seconds: int,
 ) -> dict[str, Any]:
     require_runtime(model, llama_cpp)
     benchmark_payloads = []
     for adapter in adapters:
-        samples = samples_for_adapter(adapter, max_samples=max_samples)
+        samples = [apply_max_tokens(sample, max_tokens) for sample in samples_for_adapter(adapter, max_samples=max_samples)]
         results = [run_generation(model, llama_cpp, sample, timeout_seconds) for sample in samples]
         benchmark_payloads.append(
             {
@@ -755,6 +764,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--sample-mode", choices=("smoke", "quick"), default="quick")
     parser.add_argument("--benchmark-id", action="append", default=[])
     parser.add_argument("--max-samples-per-family", type=int)
+    parser.add_argument("--max-tokens", type=int, help="Cap generation tokens per sample for practical local subsets.")
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-judge", action="store_true")
@@ -787,6 +797,7 @@ def main() -> int:
                 output_root=args.output_root,
                 llama_cpp=args.llama_cpp,
                 max_samples=args.max_samples_per_family,
+                max_tokens=args.max_tokens,
                 timeout_seconds=args.timeout,
             )
     return 0
