@@ -174,7 +174,7 @@ tags:
 - qwen3.6
 - apple-silicon
 - metal
-pipeline_tag: text-generation
+pipeline_tag: image-text-to-text
 quantized_by: zlaabsi
 ---
 
@@ -293,7 +293,7 @@ tags:
 - metal
 - apple-silicon
 - qwen3.6
-pipeline_tag: text-generation
+pipeline_tag: image-text-to-text
 quantized_by: zlaabsi
 ---
 

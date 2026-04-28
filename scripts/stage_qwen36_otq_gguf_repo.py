@@ -218,6 +218,81 @@ def md_eval_table(records: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def phase_duration(validation: dict[str, Any], label: str) -> str:
+    for phase in validation.get("phases", []):
+        if phase.get("label") == label:
+            return f"{phase.get('duration_seconds', 'n/a')}s"
+    return "n/a"
+
+
+def pass_text(value: bool) -> str:
+    return "passed" if value else "failed"
+
+
+def md_release_gate_table(records: list[dict[str, Any]]) -> str:
+    lines = [
+        "| Variant | Metadata | Bounded generation | 8K llama-bench | Smoke gate | Release gate | Timestamp |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for record in records:
+        validation = record["validation"]
+        gates = validation.get("gates", {})
+        smoke = record["quality"].get("summary", {})
+        release = record["release_eval"].get("summary", {})
+        lines.append(
+            f"| `{record['variant'].quant}` | {pass_text(bool(gates.get('gguf_metadata_read')))} | "
+            f"{pass_text(bool(gates.get('bounded_generation')))} ({phase_duration(validation, 'bounded_generation')}) | "
+            f"{pass_text(bool(gates.get('benchmark')))} ({phase_duration(validation, 'llama_bench')}) | "
+            f"{smoke.get('passed', 0)}/{smoke.get('total', 0)} | "
+            f"{release.get('passed', 0)}/{release.get('total', 0)} | "
+            f"`{validation.get('created_at', 'n/a')}` |"
+        )
+    return "\n".join(lines)
+
+
+def md_family_table(records: list[dict[str, Any]]) -> str:
+    lines = ["| File | Quant | Size | Apple Silicon target | Role |", "| --- | --- | ---: | --- | --- |"]
+    for record in records:
+        variant = record["variant"]
+        lines.append(
+            f"| `{variant.filename}` | `{variant.quant}` | {human_gib(record['bytes'])} | {variant.target} | {variant.role} |"
+        )
+    return "\n".join(lines)
+
+
+def md_allocation_summary(records: list[dict[str, Any]]) -> str:
+    tensor_types = ["F16", "Q3_K", "Q4_K", "Q5_K", "Q6_K", "Q8_0"]
+    lines = ["| Variant | Mapped tensors | " + " | ".join(tensor_types) + " |", "| --- | ---: | " + " | ".join(["---:"] * len(tensor_types)) + " |"]
+    for record in records:
+        summary = record.get("plan", {}).get("summary", {})
+        by_type = summary.get("by_type", {})
+        lines.append(
+            f"| `{record['variant'].quant}` | {summary.get('mapped_tensor_types', 'n/a')} | "
+            + " | ".join(str(by_type.get(tensor_type, 0)) for tensor_type in tensor_types)
+            + " |"
+        )
+    return "\n".join(lines)
+
+
+def md_category_table(records: list[dict[str, Any]], key: str) -> str:
+    categories = sorted(
+        {
+            category
+            for record in records
+            for category in record[key].get("summary", {}).get("categories", {}).keys()
+        }
+    )
+    lines = ["| Variant | " + " | ".join(category.replace("_", " ") for category in categories) + " |", "| --- | " + " | ".join(["---:"] * len(categories)) + " |"]
+    for record in records:
+        by_category = record[key].get("summary", {}).get("categories", {})
+        values = []
+        for category in categories:
+            payload = by_category.get(category, {})
+            values.append(f"{payload.get('passed', 0)}/{payload.get('total', 0)}")
+        lines.append(f"| `{record['variant'].quant}` | " + " | ".join(values) + " |")
+    return "\n".join(lines)
+
+
 def find_font(candidates: list[str], size: int) -> ImageFont.FreeTypeFont:
     for candidate in candidates:
         path = Path(candidate).expanduser()
@@ -308,13 +383,13 @@ def make_banner(path: Path) -> None:
 
 
 def readme(records: list[dict[str, Any]]) -> str:
-    rows = []
+    file_rows = []
     for record in records:
         variant = record["variant"]
-        rows.append(
+        file_rows.append(
             f"| `{variant.filename}` | `{variant.quant}` | {human_gib(record['bytes'])} | `{record['sha256']}` | {variant.target} |"
         )
-    file_table = "\n".join(["| File | Quant | Size | SHA256 | Target |", "| --- | --- | ---: | --- | --- |", *rows])
+    file_table = "\n".join(["| File | Quant | Size | SHA256 | Target |", "| --- | --- | ---: | --- | --- |", *file_rows])
     return f"""---
 base_model: {BASE_MODEL}
 base_model_relation: quantized
@@ -334,7 +409,7 @@ tags:
 - metal
 - dynamic-quantization
 - conversational
-pipeline_tag: text-generation
+pipeline_tag: image-text-to-text
 language:
 - en
 quantized_by: zlaabsi
@@ -344,13 +419,38 @@ quantized_by: zlaabsi
 
 ![OpenTQ TurboQuant Qwen3.6 banner](assets/opentq-qwen36-hero.png)
 
+[![GGUF](https://img.shields.io/badge/GGUF-stock%20llama.cpp-0a1628)](https://github.com/ggml-org/llama.cpp)
+[![OpenTQ](https://img.shields.io/badge/OpenTQ-TurboQuant%20allocation-0b3d73)](https://github.com/zlaabsi/opentq)
+[![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-Metal%20%2B%20FA-125ea5)](https://developer.apple.com/metal/)
+[![Release gate](https://img.shields.io/badge/release%20gate-passed-2f80c2)](#release-gate)
+[![Base model](https://img.shields.io/badge/base-Qwen%2FQwen3.6--27B-7cc7ff)](https://huggingface.co/Qwen/Qwen3.6-27B)
+
 **OpenTQ TurboQuant dynamic-compatible GGUFs** for `{BASE_MODEL}`.
 
-This repository is the stock `llama.cpp` track: OpenTQ applies a TurboQuant-inspired tensor-level allocation policy, but the published files use standard GGUF quantization types. No custom OpenTQ runtime is required for these GGUFs.
+This is the stock `llama.cpp` release track. OpenTQ chooses the tensor-level allocation policy, but the files themselves use standard GGUF tensor types (`Q3_K_M`, `Q4_K_M`, `Q5_K`, `Q6_K`, `Q8_0`, `F16`). No custom OpenTQ runtime is required for these GGUF files.
+
+> The Hugging Face `pipeline_tag` follows the official Qwen3.6-27B card (`image-text-to-text`). These GGUF artifacts are validated here for local text inference with stock `llama.cpp`; vision tensors are not part of this text-focused release track.
+
+## Why This Release Exists
+
+These builds target MacBook-class Apple Silicon where wall-clock time matters, especially with long prompts, large system messages and agent/tool context. The goal is not to publish another uniform quant; it is to provide a stock-compatible GGUF family where OpenTQ spends precision on the tensors that matter more for local inference.
+
+| Field | Value |
+| --- | --- |
+| Release track | `Qwen3.6-27B-OTQ-GGUF` |
+| Method | OpenTQ / TurboQuant-inspired dynamic tensor allocation |
+| Runtime | stock `llama.cpp` with Metal and FlashAttention |
+| Compatibility boundary | standard GGUF only; no native OpenTQ kernel required |
+| Current public variants | `Q3_K_M` compact and `Q4_K_M` balanced |
+| Validation machine | M1 Max, 8K prefill gate, bounded generation, deterministic release suites |
 
 ## Files
 
 {file_table}
+
+## Variant Family
+
+{md_family_table(records)}
 
 ## Naming
 
@@ -364,34 +464,139 @@ This repository is the stock `llama.cpp` track: OpenTQ applies a TurboQuant-insp
 - `Q3_K_M`: first pick for 32 GB Apple Silicon and larger app/tool contexts.
 - `Q4_K_M`: quality-balanced pick; usable on 32 GB at moderate context, more comfortable on 48 GB+.
 
+## Model Overview
+
+| Base model field | Value |
+| --- | --- |
+| Base model | `{BASE_MODEL}` |
+| Parameter class | 27B dense model |
+| HF architecture | `Qwen3_5ForConditionalGeneration` |
+| Layer count | 64 language layers |
+| Hidden size | 5120 |
+| Native context | 262,144 tokens in the base model; practical local context depends on RAM, KV/cache settings and apps |
+| Public GGUF modality | text inference release track |
+| Runtime target | Apple Silicon Metal through stock `llama.cpp` |
+
 ## Runtime Compatibility
 
 - `llama.cpp`, `llama-cli`, `llama-server`: supported.
 - LM Studio and Ollama local GGUF import: expected to work as standard GGUF loaders.
 - OpenTQ custom runtime: not required for this repo.
 - Native TurboQuant/OpenTQ tensor formats: separate release track, not mixed into this GGUF repo.
+- MLX: not the target runtime for this GGUF track.
+
+## Quick Start
+
+### 1. Download A GGUF
+
+```bash
+hf download {REPO_ID} Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf --local-dir models/Qwen3.6-27B-OTQ-GGUF
+```
+
+Use `Q3_K_M` first on 32 GB Macs. Use `Q4_K_M` when you can afford the extra memory.
+
+### 2. Build llama.cpp With Metal
+
+```bash
+git clone https://github.com/ggml-org/llama.cpp
+cd llama.cpp
+cmake -B build -DGGML_METAL=ON -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=ON
+cmake --build build -j
+```
+
+### 3. Run Locally
+
+```bash
+./build/bin/llama-cli \\
+  -m models/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf \\
+  -ngl 99 \\
+  -fa \\
+  -c 8192 \\
+  --temp 0.6 \\
+  --top-p 0.95 \\
+  -p "<|im_start|>user\\nExplain the tradeoff between prefill and decode throughput.<|im_end|>\\n<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\n"
+```
+
+### 4. Serve An OpenAI-Compatible API
+
+```bash
+./build/bin/llama-server \\
+  -m models/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf \\
+  -ngl 99 \\
+  -fa \\
+  -c 8192 \\
+  --host 0.0.0.0 \\
+  --port 8080
+```
+
+```bash
+curl http://localhost:8080/v1/chat/completions \\
+  -H "Content-Type: application/json" \\
+  -d '{{"model":"qwen3.6-27b-otq","messages":[{{"role":"user","content":"Give me a 3-bullet summary of OpenTQ."}}],"temperature":0.6}}'
+```
+
+## llama.cpp Settings
+
+| Setting | Recommended value | Why |
+| --- | --- | --- |
+| GPU layers | `-ngl 99` | Offload all supported layers to Metal on Apple Silicon |
+| FlashAttention | `-fa` / `-fa on` | Critical for long-context prefill wall-clock |
+| Context | `-c 8192` first | Validated release gate; increase only after checking memory headroom |
+| Prompt format | Qwen chat template | Keep `<|im_start|>` / `<|im_end|>` formatting |
+| Sampling | `--temp 0.6 --top-p 0.95` | Good default for general chat; tighten for deterministic evals |
+| Server | `llama-server` | Use for OpenAI-compatible local apps and agents |
+
+## Apple Silicon Guide
+
+| Machine class | Recommendation |
+| --- | --- |
+| 32 GB MacBook Pro / Mac Studio | Prefer `Q3_K_M` for headroom, especially with agentic prompts and other apps open. |
+| 48-64 GB Apple Silicon | Prefer `Q4_K_M` for quality-balanced local inference. |
+| 96 GB+ Apple Silicon | `Q4_K_M` is the current quality pick; future Q5/IQ4 variants can target quality-first use. |
+| Agent workloads with large tool context | Measure total wall-clock time. Decode-only tok/s hides prefill cost. |
 
 ## Benchmarks
 
 {md_bench_table(records)}
 
+![Runtime frontier](assets/runtime-frontier.png)
+
+![Prefill decode tradeoff](assets/prefill-decode-tradeoff.png)
+
+![Release scorecard](assets/release-scorecard.png)
+
+The plots compare the quantized OTQ artifacts against each other on measured release data. Official Qwen scores are kept as a reference table, not plotted as a fake delta.
+
 ## Release Evaluation
 
 {md_eval_table(records)}
 
-## Benchmark Plots
+## Release Gate
 
-![Throughput](assets/benchmark-throughput.png)
+{md_release_gate_table(records)}
 
-![Release latency](assets/eval-latency.png)
+![Release gate latency](assets/release-gate-latency.png)
 
-![Category pass rate](assets/eval-pass-rate.png)
+![Release gate coverage](assets/release-gate-coverage.png)
 
-![Artifact size](assets/artifact-size.png)
+## Official Baseline vs OTQ Claims
 
-![Official Qwen baseline](assets/official-language-baseline.png)
+| Item | Status |
+| --- | --- |
+| Official Qwen3.6-27B source scores | Imported from the official model card into `benchmarks/official_qwen36_baseline.csv` |
+| OTQ `Q3_K_M` / `Q4_K_M` runtime | Measured with `llama-bench` on M1 Max |
+| OTQ functional release gates | Measured with deterministic smoke and extended suites |
+| Official benchmark deltas | Not claimed yet; requires running the same tasks/scoring on the GGUF artifacts |
 
-Official Qwen3.6-27B scores are used as the external BF16/source-model baseline. OpenTQ does not need to rerun BF16 locally for release plotting; deltas should only be claimed after matching benchmark tasks are run on the OTQ artifacts.
+## Allocation Transparency
+
+{md_allocation_summary(records)}
+
+![Tensor allocation](assets/tensor-allocation.png)
+
+![Allocation policy](assets/allocation-policy.png)
+
+The allocation plots show where OpenTQ spends precision. For example, the compact profile pushes bulk MLP tensors lower while preserving attention anchors and output-sensitive tensors at higher precision.
 
 ## Transparency Files
 
@@ -405,17 +610,33 @@ Each variant has full release evidence under `evidence/<quant>/`:
 - `tensor-types.annotated.tsv`
 - `quantize-dry-run.log`
 
-## Usage
+## Reproduce Release Evidence
 
 ```bash
-hf download {REPO_ID} Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf --local-dir models/Qwen3.6-27B-OTQ-GGUF
+git clone https://github.com/zlaabsi/opentq
+cd opentq
+uv sync
+uv run python scripts/stage_qwen36_otq_gguf_repo.py
+uv run python scripts/build_qwen36_release_report.py --repo artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF
+```
 
-./build/bin/llama-cli \\
+Run the same style of OTQ release evaluation:
+
+```bash
+LLAMA_CPP_DIR=/path/to/llama.cpp ./scripts/run_qwen36_otq_eval.sh
+```
+
+Run the long-context benchmark directly:
+
+```bash
+./build/bin/llama-bench \\
   -m models/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf \\
   -ngl 99 \\
-  -fa \\
-  -c 8192 \\
-  -p "<|im_start|>user\\nExplain prefill vs decode throughput in one paragraph.<|im_end|>\\n<|im_start|>assistant\\n<think>\\n\\n</think>\\n\\n"
+  -fa on \\
+  -p 8192 \\
+  -n 128 \\
+  -r 1 \\
+  --no-warmup
 ```
 """
 
@@ -444,6 +665,16 @@ hf download {REPO_ID} Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf --local-dir models/Qwen3.6
   --port 8080
 ```
 
+## llama.cpp Settings
+
+| Setting | Value |
+| --- | --- |
+| Metal offload | `-ngl 99` |
+| FlashAttention | `-fa` / `-fa on` |
+| Validated context | `-c 8192` |
+| First 32 GB pick | `Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf` |
+| Quality-balanced pick | `Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf` |
+
 For Qwen-style no-thinking checks, use the same scaffold as the release gate:
 
 ```text
@@ -462,15 +693,39 @@ Your prompt
 def benchmarks_md(records: list[dict[str, Any]]) -> str:
     return f"""# Benchmarks
 
-Benchmarks were run with stock `llama.cpp`, Metal offload and FlashAttention enabled.
+Benchmarks were run with stock `llama.cpp`, Metal offload and FlashAttention enabled. These are measured OTQ GGUF release results; official Qwen scores are included as a reference CSV, not as a claimed delta.
 
-## Throughput
+## Measured OTQ Runtime
 
 {md_bench_table(records)}
+
+![Runtime frontier](assets/runtime-frontier.png)
+
+![Prefill decode tradeoff](assets/prefill-decode-tradeoff.png)
+
+![Release scorecard](assets/release-scorecard.png)
 
 ## Functional Release Suites
 
 {md_eval_table(records)}
+
+![Release gate latency](assets/release-gate-latency.png)
+
+![Release gate coverage](assets/release-gate-coverage.png)
+
+## Allocation
+
+{md_allocation_summary(records)}
+
+![Tensor allocation](assets/tensor-allocation.png)
+
+![Allocation policy](assets/allocation-policy.png)
+
+## Official Reference
+
+The official Qwen3.6-27B source-model benchmark table is exported to `benchmarks/official_qwen36_baseline.csv`.
+
+Do not interpret those rows as OTQ deltas. A delta is valid only after the same benchmark task, prompt format, sample policy and scoring rule are run on the OTQ GGUF artifacts.
 
 These suites are release gates, not full academic benchmarks. They cover small factual recall, reasoning, code output, JSON tool-call output, formatting and needle retrieval.
 """
@@ -520,6 +775,7 @@ def main() -> int:
         quality = rewrite_artifact_payload(paths["quality"], evidence / "quality-eval.json", variant, target)
         release_eval = rewrite_artifact_payload(paths["release_eval"], evidence / "release-eval.json", variant, target)
         copy_transparency(source, evidence, variant)
+        plan = load_json(evidence / "opentq-plan.json") if (evidence / "opentq-plan.json").exists() else {}
         records.append(
             {
                 "variant": variant,
@@ -529,6 +785,7 @@ def main() -> int:
                 "validation": validation,
                 "quality": quality,
                 "release_eval": release_eval,
+                "plan": plan,
             }
         )
 

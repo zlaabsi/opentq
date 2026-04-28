@@ -6,12 +6,13 @@ Matplotlib benchmark plots are implemented for the canonical Hugging Face GGUF r
 
 Generated charts:
 
-- `assets/benchmark-throughput.{svg,pdf,png}`: `pp8192` and `tg128` comparison by variant.
-- `assets/eval-latency.{svg,pdf,png}`: release eval mean and p95 latency by variant.
-- `assets/artifact-size.{svg,pdf,png}`: artifact size in GiB by variant.
-- `assets/eval-pass-rate.{svg,pdf,png}`: category pass-rate heatmap for release suites.
+- `assets/runtime-frontier.{svg,pdf,png}`: measured size/prefill/decode frontier by OTQ variant.
+- `assets/prefill-decode-tradeoff.{svg,pdf,png}`: measured prefill and decode throughput by OTQ variant.
+- `assets/release-scorecard.{svg,pdf,png}`: compact decision matrix for size, throughput and release latency.
+- `assets/release-gate-latency.{svg,pdf,png}`: release eval mean and p95 latency by variant.
+- `assets/release-gate-coverage.{svg,pdf,png}`: category pass-rate heatmap for release suites.
 - `assets/tensor-allocation.{svg,pdf,png}`: GGUF tensor-type allocation by variant.
-- `assets/official-language-baseline.{svg,pdf,png}`: official Qwen3.6-27B reference scores.
+- `assets/allocation-policy.{svg,pdf,png}`: tensor-family allocation heatmap.
 
 Generate them with:
 
@@ -24,6 +25,7 @@ Rules:
 - Use the JSON evidence already published in `evidence/<quant>/`.
 - Plot wall-clock/eval latency separately from decode-only throughput.
 - Export SVG/PDF/PNG plus CSV tables under `benchmarks/`.
+- Keep the official Qwen baseline as a reference CSV unless matching OTQ benchmark scores exist; do not plot fake deltas.
 - Keep charts reproducible from a script, not manually generated.
 
 ## Official Baseline

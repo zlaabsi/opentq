@@ -18,14 +18,17 @@ import numpy as np
 
 
 PALETTE = {
-    "q3": "#648fff",
-    "q4": "#fe6100",
-    "ref": "#8a8a8a",
-    "good": "#6acc64",
-    "warn": "#f0c75e",
-    "bad": "#d65f5f",
-    "ink": "#242424",
-    "grid": "#d8d8d8",
+    "q3": "#7cc7ff",
+    "q4": "#0b3d73",
+    "q5": "#2f80c2",
+    "q6": "#125ea5",
+    "q8": "#061a33",
+    "f16": "#cfe9ff",
+    "ref": "#6f93b7",
+    "ink": "#0a1628",
+    "muted": "#5d7692",
+    "grid": "#d8e8f7",
+    "paper": "#f8fbff",
 }
 
 
@@ -57,11 +60,11 @@ def configure_matplotlib() -> None:
         {
             "font.family": "sans-serif",
             "font.sans-serif": ["DejaVu Sans", "Helvetica Neue", "Avenir Next"],
-            "font.size": 8.8,
-            "axes.titlesize": 10.5,
-            "axes.labelsize": 9.3,
-            "xtick.labelsize": 8.3,
-            "ytick.labelsize": 8.3,
+            "font.size": 8.6,
+            "axes.titlesize": 10.2,
+            "axes.labelsize": 9.1,
+            "xtick.labelsize": 8.1,
+            "ytick.labelsize": 8.1,
             "legend.fontsize": 8.2,
             "figure.dpi": 150,
             "savefig.dpi": 320,
@@ -71,7 +74,7 @@ def configure_matplotlib() -> None:
             "lines.markersize": 6,
             "axes.linewidth": 0.8,
             "axes.grid": True,
-            "grid.alpha": 0.25,
+            "grid.alpha": 0.22,
             "grid.linewidth": 0.75,
             "axes.axisbelow": True,
             "legend.frameon": False,
@@ -207,6 +210,22 @@ def tensor_rows(variants: list[VariantEvidence]) -> list[dict[str, Any]]:
     return rows
 
 
+def category_tensor_rows(variants: list[VariantEvidence]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for variant in variants:
+        for key, count in variant.plan.get("summary", {}).get("by_category_type", {}).items():
+            category, _, tensor_type = str(key).partition(":")
+            rows.append(
+                {
+                    "variant": variant.name,
+                    "category": category,
+                    "tensor_type": tensor_type or "unknown",
+                    "count": int(count),
+                }
+            )
+    return rows
+
+
 def official_baseline_rows(path: Path | None) -> list[dict[str, Any]]:
     if not path or not path.exists():
         return []
@@ -266,25 +285,81 @@ def save_figure(fig: plt.Figure, stem: Path) -> None:
     plt.close(fig)
 
 
-def plot_throughput(rows: list[dict[str, Any]], stem: Path) -> None:
-    variants = sorted({row["variant"] for row in rows})
-    tests = ["pp8192", "tg128"]
-    values = {(row["variant"], row["test"]): row["tokens_per_second"] for row in rows}
-    x = np.arange(len(variants))
-    width = 0.34
+def bench_metric(rows: list[dict[str, Any]], variant: str, test: str) -> float:
+    for row in rows:
+        if row["variant"] == variant and row["test"] == test:
+            return float(row["tokens_per_second"])
+    return 0.0
 
-    fig, ax = plt.subplots(figsize=(7.0, 3.25))
-    test_colors = {"pp8192": "#648fff", "tg128": "#ffb000"}
-    labels = {"pp8192": "Prefill 8K", "tg128": "Decode 128"}
-    for offset, test in zip((-width / 2, width / 2), tests):
-        ys = [values.get((variant, test), 0.0) for variant in variants]
-        bars = ax.bar(x + offset, ys, width=width, label=labels[test], color=test_colors[test], edgecolor="#2d2d2d", linewidth=0.7)
-        ax.bar_label(bars, fmt="%.1f", padding=2, fontsize=8.5)
 
-    ax.set_xticks(x, [clean_label(v) for v in variants])
-    ax.set_ylabel("tokens / second")
-    ax.set_title("M1 Max runtime throughput", loc="left", fontweight="semibold")
-    ax.legend(loc="upper right", ncol=2, columnspacing=1.0, handletextpad=0.4)
+def size_metric(rows: list[dict[str, Any]], variant: str) -> float:
+    for row in rows:
+        if row["variant"] == variant:
+            return float(row["gib"])
+    return 0.0
+
+
+def plot_runtime_frontier(bench: list[dict[str, Any]], artifacts: list[dict[str, Any]], stem: Path) -> None:
+    variants = sorted({row["variant"] for row in bench})
+    sizes = [size_metric(artifacts, variant) for variant in variants]
+    prefill = [bench_metric(bench, variant, "pp8192") for variant in variants]
+    decode = [bench_metric(bench, variant, "tg128") for variant in variants]
+
+    fig, ax = plt.subplots(figsize=(7.0, 3.4))
+    for variant, x, y, tg in zip(variants, sizes, prefill, decode):
+        ax.scatter(
+            x,
+            y,
+            s=240 + tg * 18,
+            color=variant_color(variant),
+            edgecolor=PALETTE["ink"],
+            linewidth=0.9,
+            zorder=3,
+        )
+        ax.annotate(
+            f"{clean_label(variant)}\n{tg:.2f} tok/s decode",
+            (x, y),
+            textcoords="offset points",
+            xytext=(12, -4 if "Q3" in variant else -24),
+            fontsize=8.5,
+            color=PALETTE["ink"],
+        )
+    ax.plot(sizes, prefill, color="#7fb5df", linewidth=1.4, alpha=0.8, zorder=2)
+    ax.set_xlabel("GGUF artifact size (GiB)")
+    ax.set_ylabel("prefill throughput at 8K context (tok/s)")
+    ax.set_title("M1 Max size / prefill / decode frontier", loc="left", fontweight="semibold")
+    ax.set_xlim(max(0, min(sizes) - 1.2), max(sizes) + 2.0)
+    ax.set_ylim(max(0, min(prefill) - 2.0), max(prefill) + 4.0)
+    ax.text(
+        0.99,
+        0.04,
+        "bubble label = measured tg128 decode throughput",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=8,
+        color=PALETTE["muted"],
+    )
+    polish_axes(ax)
+    save_figure(fig, stem)
+
+
+def plot_prefill_decode_tradeoff(bench: list[dict[str, Any]], stem: Path) -> None:
+    variants = sorted({row["variant"] for row in bench})
+    tests = [("pp8192", "Prefill 8K"), ("tg128", "Decode 128")]
+    y = np.arange(len(tests))
+
+    fig, ax = plt.subplots(figsize=(7.0, 2.85))
+    for idx, variant in enumerate(variants):
+        values = [bench_metric(bench, variant, test) for test, _ in tests]
+        offset = (idx - (len(variants) - 1) / 2) * 0.18
+        ax.scatter(values, y + offset, s=95, color=variant_color(variant), edgecolor=PALETTE["ink"], linewidth=0.7, label=clean_label(variant), zorder=3)
+        for value, yi in zip(values, y + offset):
+            ax.annotate(f"{value:.2f}", (value, yi), textcoords="offset points", xytext=(8, -3), fontsize=8.2, color=PALETTE["ink"])
+    ax.set_yticks(y, [label for _, label in tests])
+    ax.set_xlabel("tokens / second")
+    ax.set_title("Measured prefill vs decode tradeoff", loc="left", fontweight="semibold")
+    ax.legend(loc="upper right", ncol=len(variants), handletextpad=0.35, columnspacing=0.9)
     polish_axes(ax)
     save_figure(fig, stem)
 
@@ -297,16 +372,16 @@ def plot_eval_latency(rows: list[dict[str, Any]], stem: Path) -> None:
     p95 = [float(row["latency_seconds_p95"]) for row in release]
     x = np.arange(len(variants))
 
-    fig, ax = plt.subplots(figsize=(3.5, 3.0))
+    fig, ax = plt.subplots(figsize=(4.1, 3.0))
     bars = ax.bar(x, mean, color=[variant_color(v) for v in variants], edgecolor="#2d2d2d", linewidth=0.7, label="mean")
-    ax.plot(x, p95, color="#dc267f", marker="o", linewidth=2.0, label="p95", zorder=3)
+    ax.plot(x, p95, color="#0f5f9f", marker="o", linewidth=2.0, label="p95", zorder=3)
     ax.bar_label(bars, labels=[f"{value:.1f}s" for value in mean], padding=2, fontsize=8.5)
     for xi, value in zip(x, p95):
-        ax.annotate(f"{value:.1f}s", (xi, value), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8.5, color="#7a1244")
+        ax.annotate(f"{value:.1f}s", (xi, value), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8.5, color=PALETTE["ink"])
 
     ax.set_xticks(x, labels)
     ax.set_ylabel("seconds / sample")
-    ax.set_title("Release-suite latency", loc="left", fontweight="semibold")
+    ax.set_title("Release-gate latency by quantized artifact", loc="left", fontweight="semibold")
     ax.legend(loc="upper right", ncol=2, columnspacing=0.9)
     polish_axes(ax)
     save_figure(fig, stem)
@@ -323,55 +398,120 @@ def plot_pass_rate(rows: list[dict[str, Any]], stem: Path) -> None:
             matrix[i, j] = lookup.get((variant, category), np.nan)
 
     fig, ax = plt.subplots(figsize=(7.0, 2.6))
-    image = ax.imshow(matrix, vmin=0.0, vmax=1.0, cmap="Greens", aspect="auto")
+    image = ax.imshow(matrix, vmin=0.0, vmax=1.0, cmap="Blues", aspect="auto")
     ax.set_xticks(np.arange(len(categories)), [c.replace("_", " ") for c in categories], rotation=28, ha="right")
     ax.set_yticks(np.arange(len(variants)), [clean_label(v) for v in variants])
     for i in range(len(variants)):
         for j in range(len(categories)):
             value = matrix[i, j]
-            ax.text(j, i, "n/a" if np.isnan(value) else f"{value:.0%}", ha="center", va="center", fontsize=9, color="#152015")
+            ax.text(j, i, "n/a" if np.isnan(value) else f"{value:.0%}", ha="center", va="center", fontsize=9, color=PALETTE["ink"])
 
-    ax.set_title("Release-suite pass rate by category", loc="left", fontweight="semibold")
+    ax.set_title("Release-gate coverage by category", loc="left", fontweight="semibold")
     cbar = fig.colorbar(image, ax=ax, fraction=0.035, pad=0.02)
     cbar.ax.yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
     save_figure(fig, stem)
 
 
-def plot_artifacts(rows: list[dict[str, Any]], stem: Path) -> None:
-    variants = [row["variant"] for row in rows]
-    sizes = [float(row["gib"]) for row in rows]
-    fig, ax = plt.subplots(figsize=(3.5, 3.0))
-    y = np.arange(len(variants))
-    bars = ax.barh(y, sizes, color=[variant_color(v) for v in variants], edgecolor="#2d2d2d", linewidth=0.7)
-    ax.bar_label(bars, labels=[f"{value:.2f} GiB" for value in sizes], padding=3, fontsize=8.5)
-    ax.axvline(32, color=PALETTE["ref"], linewidth=1.2, linestyle="--")
-    ax.text(32, len(variants) - 0.35, "32 GB", color=PALETTE["ref"], fontsize=8.5, ha="right")
-    ax.set_yticks(y, [clean_label(v) for v in variants])
-    ax.set_xlabel("artifact size (GiB)")
-    ax.set_title("Final GGUF size", loc="left", fontweight="semibold")
-    ax.set_xlim(0, max(34, max(sizes) * 1.2))
-    polish_axes(ax)
+def plot_release_scorecard(
+    artifacts: list[dict[str, Any]],
+    evals: list[dict[str, Any]],
+    bench: list[dict[str, Any]],
+    stem: Path,
+) -> None:
+    release = {row["variant"]: row for row in evals if row["suite"] == "release"}
+    variants = sorted(release)
+    labels = [clean_label(variant) for variant in variants]
+    metrics = [
+        ("Size", [size_metric(artifacts, variant) for variant in variants], "GiB", False),
+        ("Prefill", [bench_metric(bench, variant, "pp8192") for variant in variants], "tok/s", True),
+        ("Decode", [bench_metric(bench, variant, "tg128") for variant in variants], "tok/s", True),
+        ("p95 latency", [float(release[variant]["latency_seconds_p95"]) for variant in variants], "s", False),
+    ]
+    normalized = np.zeros((len(metrics), len(variants)))
+    for row_idx, (_, values, _, higher_is_better) in enumerate(metrics):
+        arr = np.array(values, dtype=float)
+        if np.allclose(arr.max(), arr.min()):
+            normalized[row_idx] = 1.0
+            continue
+        scaled = (arr - arr.min()) / (arr.max() - arr.min())
+        normalized[row_idx] = scaled if higher_is_better else 1.0 - scaled
+
+    fig, ax = plt.subplots(figsize=(7.0, 3.1))
+    image = ax.imshow(normalized, vmin=0.0, vmax=1.0, cmap="Blues", aspect="auto")
+    ax.set_xticks(np.arange(len(variants)), labels)
+    ax.set_yticks(np.arange(len(metrics)), [metric[0] for metric in metrics])
+    for row_idx, (_, values, unit, _) in enumerate(metrics):
+        for col_idx, value in enumerate(values):
+            text_color = "white" if normalized[row_idx, col_idx] >= 0.58 else PALETTE["ink"]
+            ax.text(col_idx, row_idx, f"{value:.2f} {unit}", ha="center", va="center", fontsize=8.2, color=text_color)
+    ax.set_title("Release decision scorecard", loc="left", fontweight="semibold")
+    cbar = fig.colorbar(image, ax=ax, fraction=0.035, pad=0.02)
+    cbar.set_label("relative fit for local release", fontsize=8.2)
     save_figure(fig, stem)
 
 
 def plot_tensor_allocation(rows: list[dict[str, Any]], stem: Path) -> None:
     variants = sorted({row["variant"] for row in rows})
-    tensor_types = sorted({row["tensor_type"] for row in rows})
+    tensor_types = ["F16", "Q3_K", "Q4_K", "Q5_K", "Q6_K", "Q8_0"]
     lookup = {(row["variant"], row["tensor_type"]): int(row["count"]) for row in rows}
     totals = np.array([sum(lookup.get((variant, t), 0) for t in tensor_types) for variant in variants], dtype=float)
     fig, ax = plt.subplots(figsize=(7.0, 3.15))
     bottom = np.zeros(len(variants))
-    palette = ["#648fff", "#fe6100", "#ffb000", "#785ef0", "#dc267f", "#6acc64", "#8a8a8a"]
-    for idx, tensor_type in enumerate(tensor_types):
+    colors = {"F16": PALETTE["f16"], "Q3_K": PALETTE["q3"], "Q4_K": "#4494d1", "Q5_K": PALETTE["q5"], "Q6_K": PALETTE["q6"], "Q8_0": PALETTE["q8"]}
+    for tensor_type in tensor_types:
         counts = np.array([lookup.get((variant, tensor_type), 0) for variant in variants], dtype=float)
         values = np.divide(counts, totals, out=np.zeros_like(counts), where=totals > 0)
-        ax.bar([clean_label(v) for v in variants], values, bottom=bottom, label=tensor_type, color=palette[idx % len(palette)], edgecolor="white", linewidth=0.6)
+        ax.bar([clean_label(v) for v in variants], values, bottom=bottom, label=tensor_type, color=colors[tensor_type], edgecolor="white", linewidth=0.6)
         bottom += values
     ax.yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
-    ax.set_ylabel("share of tensors")
-    ax.set_title("GGUF tensor-type allocation", loc="left", fontweight="semibold")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.18), ncol=min(5, len(tensor_types)), columnspacing=0.8, handletextpad=0.3)
+    ax.set_ylabel("share of mapped tensors")
+    ax.set_title("Dynamic GGUF tensor-type allocation", loc="left", fontweight="semibold")
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.18), ncol=len(tensor_types), columnspacing=0.8, handletextpad=0.3)
     polish_axes(ax)
+    save_figure(fig, stem)
+
+
+def plot_allocation_policy(rows: list[dict[str, Any]], stem: Path) -> None:
+    priority = [
+        "mlp_proj",
+        "linear_attn_proj",
+        "self_attn_proj",
+        "embeddings",
+        "lm_head",
+        "linear_attn_state",
+        "layernorm",
+    ]
+    variants = sorted({row["variant"] for row in rows})
+    categories = [category for category in priority if any(row["category"] == category for row in rows)]
+    tensor_types = ["F16", "Q3_K", "Q4_K", "Q5_K", "Q6_K", "Q8_0"]
+    type_index = {tensor_type: idx for idx, tensor_type in enumerate(tensor_types)}
+    fig, axes = plt.subplots(1, len(variants), figsize=(7.0, 3.45), sharey=True)
+    if len(variants) == 1:
+        axes = [axes]
+    for ax, variant in zip(axes, variants):
+        matrix = np.full((len(categories), len(tensor_types)), np.nan)
+        for i, category in enumerate(categories):
+            category_rows = [row for row in rows if row["variant"] == variant and row["category"] == category]
+            total = sum(int(row["count"]) for row in category_rows)
+            if total == 0:
+                continue
+            for row in category_rows:
+                tensor_type = row["tensor_type"]
+                if tensor_type in type_index:
+                    matrix[i, type_index[tensor_type]] = int(row["count"]) / total
+        ax.imshow(np.nan_to_num(matrix), vmin=0.0, vmax=1.0, cmap="Blues", aspect="auto")
+        ax.set_title(clean_label(variant), fontweight="semibold")
+        ax.set_xticks(np.arange(len(tensor_types)), tensor_types, rotation=35, ha="right")
+        ax.set_yticks(np.arange(len(categories)), [category.replace("_", " ") for category in categories])
+        for i in range(len(categories)):
+            for j in range(len(tensor_types)):
+                value = matrix[i, j]
+                if np.isnan(value) or value <= 0:
+                    continue
+                text_color = "white" if value >= 0.75 else PALETTE["ink"]
+                ax.text(j, i, f"{value:.0%}", ha="center", va="center", fontsize=7.0, color=text_color)
+    axes[0].set_ylabel("tensor family")
+    fig.suptitle("Where OpenTQ spends precision", x=0.02, y=1.0, ha="left", fontweight="semibold", fontsize=10.2)
     save_figure(fig, stem)
 
 
@@ -388,7 +528,7 @@ def plot_official_baseline(rows: list[dict[str, Any]], stem: Path) -> None:
     plot_rows = selected
     labels = [str(row["benchmark"]) for row in plot_rows]
     scores = [float(row["score"]) for row in plot_rows]
-    colors = [("#648fff" if row["category"] == "Coding Agent" else "#fe6100" if row["category"] == "Knowledge" else "#785ef0") for row in plot_rows]
+    colors = [("#9cd5ff" if row["category"] == "Coding Agent" else "#3187c7" if row["category"] == "Knowledge" else "#0b3d73") for row in plot_rows]
     y = np.arange(len(plot_rows))
 
     fig, ax = plt.subplots(figsize=(7.0, 4.4))
@@ -439,7 +579,7 @@ def write_report_md(
     quant_evals: list[dict[str, Any]],
 ) -> None:
     official_note = (
-        "Official Qwen3.6-27B language benchmark scores are imported as an external BF16 reference. We do not rerun BF16 locally for release plotting."
+        "Official Qwen3.6-27B language benchmark scores are imported as an external reference table in `benchmarks/official_qwen36_baseline.csv`. They are not plotted against OTQ until matching benchmark tasks are run on these GGUF files."
         if official_rows
         else "No official baseline JSON was available when this report was generated."
     )
@@ -451,27 +591,29 @@ def write_report_md(
     lines = [
         "# Benchmarks",
         "",
-        "Benchmarks are split into runtime throughput, release-gate checks, artifact metrics, and the official Qwen reference baseline.",
+        "Benchmarks are split into measured OTQ runtime frontiers, release-gate checks, allocation transparency, and the official Qwen reference table.",
         "",
-        "## Runtime",
+        "## Measured OTQ Runtime",
         "",
-        figure_links("benchmark-throughput"),
+        figure_links("runtime-frontier"),
         "",
-        figure_links("artifact-size"),
+        figure_links("prefill-decode-tradeoff"),
+        "",
+        figure_links("release-scorecard"),
         "",
         figure_links("tensor-allocation"),
         "",
+        figure_links("allocation-policy"),
+        "",
         "## Release Gates",
         "",
-        figure_links("eval-latency"),
+        figure_links("release-gate-latency"),
         "",
-        figure_links("eval-pass-rate"),
+        figure_links("release-gate-coverage"),
         "",
         "These release suites are deterministic guardrails, not substitutes for full academic benchmarks.",
         "",
-        "## Official Baseline",
-        "",
-        figure_links("official-language-baseline") if official_rows else official_note,
+        "## Official Qwen Baseline",
         "",
         official_note,
         "",
@@ -488,6 +630,7 @@ def write_report_md(
         "- `benchmarks/category_pass_rate.csv`",
         "- `benchmarks/artifacts.csv`",
         "- `benchmarks/tensor_allocation.csv`",
+        "- `benchmarks/category_tensor_allocation.csv`",
         "- `benchmarks/official_qwen36_baseline.csv`",
         "- `benchmarks/quant_eval.csv` when OTQ-only task runs are present",
     ]
@@ -508,6 +651,7 @@ def main() -> int:
     categories = category_rows(variants)
     artifacts = artifact_rows(repo)
     tensors = tensor_rows(variants)
+    category_tensors = category_tensor_rows(variants)
     official_rows = official_baseline_rows(Path(args.official_baseline) if args.official_baseline else None)
     quant_evals = quant_eval_rows(Path(quant_eval_arg) if quant_eval_arg else None)
 
@@ -530,6 +674,7 @@ def main() -> int:
     write_csv(data_dir / "category_pass_rate.csv", categories, ["variant", "suite", "category", "total", "passed", "pass_rate"])
     write_csv(data_dir / "artifacts.csv", artifacts, ["variant", "filename", "bytes", "gib", "sha256"])
     write_csv(data_dir / "tensor_allocation.csv", tensors, ["variant", "tensor_type", "count"])
+    write_csv(data_dir / "category_tensor_allocation.csv", category_tensors, ["variant", "category", "tensor_type", "count"])
     write_csv(
         data_dir / "official_qwen36_baseline.csv",
         official_rows,
@@ -538,12 +683,13 @@ def main() -> int:
     if quant_evals:
         write_csv(data_dir / "quant_eval.csv", quant_evals, ["model", "total", "passed", "pass_rate", "latency_seconds_mean", "latency_seconds_p95"])
 
-    plot_throughput(bench, assets / "benchmark-throughput")
-    plot_eval_latency(evals, assets / "eval-latency")
-    plot_pass_rate(categories, assets / "eval-pass-rate")
-    plot_artifacts(artifacts, assets / "artifact-size")
+    plot_runtime_frontier(bench, artifacts, assets / "runtime-frontier")
+    plot_prefill_decode_tradeoff(bench, assets / "prefill-decode-tradeoff")
+    plot_release_scorecard(artifacts, evals, bench, assets / "release-scorecard")
+    plot_eval_latency(evals, assets / "release-gate-latency")
+    plot_pass_rate(categories, assets / "release-gate-coverage")
     plot_tensor_allocation(tensors, assets / "tensor-allocation")
-    plot_official_baseline(official_rows, assets / "official-language-baseline")
+    plot_allocation_policy(category_tensors, assets / "allocation-policy")
     plot_quant_eval(quant_evals, assets / "quant-eval-summary")
     write_report_md(repo, official_rows, quant_evals)
     print(f"wrote publication-grade benchmark report assets under {repo}")
