@@ -442,6 +442,13 @@ def format_qwen_prompt(prompt: str, prompt_format: str) -> str:
     raise ValueError(f"unsupported prompt_format: {prompt_format}")
 
 
+def generation_binary(llama_cpp: Path) -> Path:
+    completion = llama_cpp / "build" / "bin" / "llama-completion"
+    if completion.exists():
+        return completion
+    return llama_cpp / "build" / "bin" / "llama-cli"
+
+
 def clean_generated_text(output: str) -> str:
     cleaned = output.strip()
     while cleaned.endswith("[end of text]"):
@@ -643,7 +650,7 @@ def samples_for_adapter(adapter: BenchmarkAdapter, max_samples: int | None = Non
 def generation_command(model: ModelTarget, llama_cpp: Path, sample: dict[str, Any], timeout_seconds: int) -> list[str]:
     _ = timeout_seconds
     return [
-        str(llama_cpp / "build" / "bin" / "llama-cli"),
+        str(generation_binary(llama_cpp)),
         "-m",
         str(model.path),
         "-ngl",
@@ -657,10 +664,11 @@ def generation_command(model: ModelTarget, llama_cpp: Path, sample: dict[str, An
         "-fa",
         "on",
         "-no-cnv",
-        "--single-turn",
         "--simple-io",
         "--no-warmup",
         "--no-display-prompt",
+        "--log-verbosity",
+        "1",
         "--temp",
         "0",
     ]
@@ -698,7 +706,7 @@ def require_runtime(model: ModelTarget, llama_cpp: Path) -> None:
         raise ValueError("BF16 benchmark execution is intentionally not supported locally by this GGUF runner")
     if not model.path.exists():
         raise FileNotFoundError(f"missing model file: {model.path}")
-    binary = llama_cpp / "build" / "bin" / "llama-cli"
+    binary = generation_binary(llama_cpp)
     if not binary.exists():
         raise FileNotFoundError(f"missing llama.cpp binary: {binary}")
 

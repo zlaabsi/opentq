@@ -7,6 +7,9 @@ from pathlib import Path
 from scripts.run_qwen36_benchmark_subsets import (
     ADAPTERS,
     build_sample_from_row,
+    generation_binary,
+    generation_command,
+    ModelTarget,
     score_benchmark_output,
 )
 
@@ -203,3 +206,29 @@ def test_score_benchmark_output_handles_multiple_choice_and_numeric_answers() ->
     assert score_benchmark_output(mc, "The answer is D.")["passed"] is True
     assert score_benchmark_output(mc, "The answer is A.")["passed"] is False
     assert score_benchmark_output(numeric, "Final answer: 18")["passed"] is True
+
+
+def test_generation_command_prefers_llama_completion(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "build" / "bin"
+    bin_dir.mkdir(parents=True)
+    completion = bin_dir / "llama-completion"
+    cli = bin_dir / "llama-cli"
+    completion.write_text("", encoding="utf-8")
+    cli.write_text("", encoding="utf-8")
+    sample = {
+        "prompt": "Return B.",
+        "prompt_format": "qwen3-no-think",
+        "max_tokens": 8,
+    }
+
+    command = generation_command(
+        ModelTarget("q3", tmp_path / "model.gguf"),
+        tmp_path,
+        sample,
+        timeout_seconds=10,
+    )
+
+    assert generation_binary(tmp_path) == completion
+    assert command[0] == str(completion)
+    assert "-no-cnv" in command
+    assert "--no-display-prompt" in command
