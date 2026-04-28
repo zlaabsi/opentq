@@ -35,6 +35,7 @@ def build_cli_command(model: Path, prompt: str, config: RuntimeConfig) -> list[s
         "99",
         "-fa",
         "on",
+        "--no-warmup",
         "-no-cnv",
         "--simple-io",
     ]
@@ -63,26 +64,32 @@ def write_runtime_result(output: Path, payload: dict[str, Any]) -> None:
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def tail_text(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")[-4000:]
+    return value[-4000:]
+
+
 def run_command(command: list[str], timeout_seconds: int) -> dict[str, Any]:
     try:
         completed = subprocess.run(command, text=True, capture_output=True, check=False, timeout=timeout_seconds)
     except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout if isinstance(exc.stdout, str) else ""
-        stderr = exc.stderr if isinstance(exc.stderr, str) else ""
         return {
             "command": command,
             "returncode": -1,
             "timed_out": True,
             "timeout_seconds": timeout_seconds,
-            "stdout_tail": stdout[-4000:],
-            "stderr_tail": stderr[-4000:],
+            "stdout_tail": tail_text(exc.stdout),
+            "stderr_tail": tail_text(exc.stderr),
         }
     return {
         "command": command,
         "returncode": completed.returncode,
         "timed_out": False,
-        "stdout_tail": completed.stdout[-4000:],
-        "stderr_tail": completed.stderr[-4000:],
+        "stdout_tail": tail_text(completed.stdout),
+        "stderr_tail": tail_text(completed.stderr),
     }
 
 
