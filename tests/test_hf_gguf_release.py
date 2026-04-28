@@ -143,7 +143,7 @@ def test_canonical_readme_contains_hardware_compatibility_table(tmp_path: Path) 
     assert "| M1 Max 32 GB | Measured | `Q3_K_M`" in markdown
     assert "| 16 GB Apple Silicon | Not recommended | None" in markdown
     assert "Expected rows are capacity guidance, not measured benchmark claims." in markdown
-    assert "`Q5_K_M` is pending until disk cleanup" in markdown
+    assert "`Q5_K_M` is measured on M1 Max 32 GB" in markdown
 
 
 def test_practical_subset_markdown_includes_q3_q4_scores(tmp_path: Path) -> None:

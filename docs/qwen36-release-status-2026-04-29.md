@@ -8,10 +8,18 @@
 - Generated the practical degradation report under `artifacts/qwen3.6-27b-degradation-report-practical/`.
 - Refreshed `zlaabsi/Qwen3.6-27B-OTQ-GGUF` with:
   - hardware compatibility;
-  - Q5 pending status;
+  - Q5 pending status at first, then local Q5-ready staging after validation;
   - practical mini-subset scores;
   - no fake BF16 degradation claim.
 - Cleaned only regenerable Hugging Face caches and recovered disk to about 80 GiB free.
+- Generated `Q5_K_M` and completed local release gates:
+  - smoke validation: passed;
+  - runtime recheck with `qwen3-no-think`: bounded generation passed with `Paris`;
+  - `llama-bench` 8K: `pp8192` `102.51 +/- 1.23` t/s and `tg128` `8.97 +/- 0.11` t/s in `artifacts/release-audit/runtime-Q5_K_M-M1_Max_32GB-qwen3-no-think.json`;
+  - release validation: passed with `pp8192` `93.94` t/s and `tg128` `8.87` t/s in `artifacts/qwen3.6-27b-dynamic-validation/Qwen3.6-27B-OTQ-DYN-Q5_K_M-GGUF-release-bench.json`;
+  - quality eval: `5/5`;
+  - release extended eval: `10/10`.
+- Regenerated local canonical staging at `artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF` with `Q3_K_M`, `Q4_K_M`, and `Q5_K_M`.
 
 ## Cleanup Decision
 
@@ -20,6 +28,7 @@ Deleted:
 - `~/.cache/huggingface/hub/models--Qwen--Qwen3.6-27B`;
 - `~/.cache/huggingface/xet`;
 - `~/.cache/huggingface/hub/models--BAAI--bge-m3`.
+- remaining small regenerable HF model caches after disk dipped below the Q5 threshold.
 
 Preserved:
 
@@ -32,7 +41,7 @@ The decision is documented in `docs/qwen36-disk-cleanup-arbitrage.md`.
 
 ## Still Gated
 
-- `Q5_K_M`: disk-unblocked, but not generated or release-valid yet.
+- Q5 HF publication: local staging is ready, but the 20 GiB upload is still gated on `HF_UPLOAD=1` or a direct upload instruction.
 - SWE-bench and LiveCodeBench: require real harness adapters.
 - MT-Bench, Chatbot Arena style, AlpacaEval: require a pinned judge setup.
 - MMMU and MathVista: blocked for the current text-only GGUF track.
@@ -41,4 +50,4 @@ The decision is documented in `docs/qwen36-disk-cleanup-arbitrage.md`.
 
 ## Public Claim Boundary
 
-The HF card may claim stock GGUF usability, M1 Max measured runtime gates, and practical OTQ mini-subset scores. It must not claim full benchmark parity or BF16 degradation unless the matching benchmark setup is run.
+The HF card may claim stock GGUF usability, M1 Max measured runtime gates, Q5 local validation once uploaded, and practical OTQ mini-subset scores. It must not claim full benchmark parity or BF16 degradation unless the matching benchmark setup is run.

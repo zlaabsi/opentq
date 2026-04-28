@@ -119,6 +119,8 @@ def variant_color(name: str) -> str:
         return PALETTE["q3"]
     if "Q4" in name:
         return PALETTE["q4"]
+    if "Q5" in name:
+        return PALETTE["q5"]
     return PALETTE["ref"]
 
 

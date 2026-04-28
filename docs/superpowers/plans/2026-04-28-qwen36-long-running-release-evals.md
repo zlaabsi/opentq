@@ -23,9 +23,9 @@
 
 - Disk cleanup was executed for regenerable Hugging Face caches only. Free disk is about `80 GiB`.
 - The local BF16 GGUF source was preserved for Q5/re-quantization.
-- The canonical HF GGUF repo was refreshed and verified remotely. The README now contains hardware compatibility, `Q5_K_M` pending status, and practical mini-subset totals: `Q3_K_M` `39/68`, `Q4_K_M` `39/68`.
+- The canonical HF GGUF repo was refreshed and verified remotely. The README contains hardware compatibility and practical mini-subset totals: `Q3_K_M` `39/68`, `Q4_K_M` `39/68`.
 - Local BF16 sidecar remains intentionally skipped on M1 Max 32 GB; use official Qwen baseline unless paid/remote BF16 execution is explicitly approved.
-- `Q5_K_M` is now the next executable stock-GGUF candidate, but it remains unpublished until generation, smoke validation, runtime gates, and HF refresh pass.
+- `Q5_K_M` was generated locally and passed smoke, quality `5/5`, release extended `10/10`, M1 Max 32 GB bounded generation, and 8K `llama-bench` gates. Canonical local staging now includes Q5, but HF upload of the 20 GiB file remains gated on `HF_UPLOAD=1` or a direct upload instruction.
 
 ---
 
@@ -505,7 +505,7 @@ Rows without compatible official or BF16 mini baselines say no_delta_claim.
 
 ## Phase 6: Q5_K_M Decision
 
-- [ ] **Step 6.1: Check disk before generating Q5**
+- [x] **Step 6.1: Check disk before generating Q5**
 
 Run:
 
@@ -519,9 +519,9 @@ Expected:
 At least 80 GiB free before starting another full GGUF quantization.
 ```
 
-Skip Q5 generation when free disk is below `80 GiB`.
+Result: disk cleanup restored enough free space to run the Q5 conversion. After Q5 staging, free space is back near the low-50 GiB range, so do not start another full GGUF conversion without another cleanup decision.
 
-- [ ] **Step 6.2: Generate Q5 only when storage is sufficient**
+- [x] **Step 6.2: Generate Q5 only when storage is sufficient**
 
 Run only if Step 6.1 passes:
 
@@ -536,7 +536,15 @@ Expected:
 Q5_K_M conversion job starts and writes logs under artifacts.
 ```
 
-- [ ] **Step 6.3: Gate Q5 before staging**
+Result:
+
+```text
+artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q5_K_M-GGUF/Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf
+```
+
+The file is `19.92 GiB`, SHA256 `aaf270a91d943e9f26692f267aa9ccaa5359ae2084abb8ba76d84d56b660ab16`.
+
+- [x] **Step 6.3: Gate Q5 before staging**
 
 Run:
 
@@ -550,7 +558,18 @@ Expected:
 Q5_K_M shows conversion, validation, quality eval, release eval, and benchmark evidence.
 ```
 
-Do not add Q5 to public HF staging until validation, quality, release, and runtime benchmark gates all pass.
+Result:
+
+```text
+smoke: passed
+quality eval: 5/5
+release extended: 10/10
+runtime bounded generation: passed with qwen3-no-think
+runtime llama-bench: pp8192 102.51 +/- 1.23 t/s; tg128 8.97 +/- 0.11 t/s
+release bench: pp8192 93.94 t/s; tg128 8.87 t/s
+```
+
+Q5 was added to local canonical HF staging after validation, quality, release, and runtime benchmark gates passed. Do not upload the Q5 GGUF to the public HF repo unless `HF_UPLOAD=1` is set or the user gives a direct upload instruction.
 
 ## Phase 7: OTQ-Packed Gate And Upload Staging
 

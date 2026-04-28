@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,9 +19,25 @@ class RuntimeConfig:
     timeout_seconds: int = 600
 
 
+def generation_binary(llama_cpp: Path) -> Path:
+    completion = llama_cpp / "build" / "bin" / "llama-completion"
+    if completion.exists():
+        return completion
+    return llama_cpp / "build" / "bin" / "llama-cli"
+
+
+def format_prompt(prompt: str, prompt_format: str) -> str:
+    if prompt_format == "raw":
+        return prompt
+    if prompt_format == "qwen3-no-think":
+        return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    raise ValueError(f"unsupported prompt format: {prompt_format}")
+
+
 def build_cli_command(model: Path, prompt: str, config: RuntimeConfig) -> list[str]:
-    return [
-        str(config.llama_cpp / "build" / "bin" / "llama-cli"),
+    binary = generation_binary(config.llama_cpp)
+    command = [
+        str(binary),
         "-m",
         str(model),
         "-p",
@@ -36,9 +53,20 @@ def build_cli_command(model: Path, prompt: str, config: RuntimeConfig) -> list[s
         "-fa",
         "on",
         "--no-warmup",
-        "-no-cnv",
-        "--single-turn",
     ]
+    if binary.name == "llama-completion":
+        command.extend(
+            [
+                "-no-cnv",
+                "--simple-io",
+                "--no-display-prompt",
+                "--log-verbosity",
+                "1",
+                "--temp",
+                "0",
+            ]
+        )
+    return command
 
 
 def build_bench_command(model: Path, config: RuntimeConfig) -> list[str]:
@@ -93,6 +121,26 @@ def run_command(command: list[str], timeout_seconds: int) -> dict[str, Any]:
     }
 
 
+def generation_passed(result: dict[str, Any], expected_output_regex: str | None) -> bool:
+    if result["returncode"] != 0 or result["timed_out"]:
+        return False
+    stdout = str(result.get("stdout_tail", ""))
+    stderr = str(result.get("stderr_tail", ""))
+    combined = f"{stdout}\n{stderr}".lower()
+    unsupported_markers = (
+        "not supported",
+        "please use llama-completion",
+        "available commands:",
+    )
+    if any(marker in combined for marker in unsupported_markers):
+        return False
+    if not stdout.strip():
+        return False
+    if expected_output_regex and re.search(expected_output_regex, stdout) is None:
+        return False
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run local Qwen3.6 GGUF runtime checks.")
     parser.add_argument("--model", type=Path, required=True)
@@ -100,10 +148,12 @@ def main() -> None:
     parser.add_argument("--machine", default="M1 Max 32GB")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--prompt", default="Réponds uniquement par la capitale de la France.")
+    parser.add_argument("--prompt-format", choices=["raw", "qwen3-no-think"], default="qwen3-no-think")
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--ctx-size", type=int, default=8192)
     parser.add_argument("--predict", type=int, default=64)
     parser.add_argument("--timeout-seconds", type=int, default=600)
+    parser.add_argument("--expected-output-regex", default=r"\bParis\b")
     args = parser.parse_args()
 
     config = RuntimeConfig(
@@ -113,13 +163,19 @@ def main() -> None:
         predict=args.predict,
         timeout_seconds=args.timeout_seconds,
     )
-    cli_result = run_command(build_cli_command(args.model, args.prompt, config), config.timeout_seconds)
+    cli_result = run_command(
+        build_cli_command(args.model, format_prompt(args.prompt, args.prompt_format), config),
+        config.timeout_seconds,
+    )
     bench_result = run_command(build_bench_command(args.model, config), config.timeout_seconds)
+    bounded_generation_passed = generation_passed(cli_result, args.expected_output_regex)
     payload = {
         "model": str(args.model),
         "machine": args.machine,
         "platform": platform.platform(),
-        "bounded_generation_passed": cli_result["returncode"] == 0,
+        "prompt_format": args.prompt_format,
+        "expected_output_regex": args.expected_output_regex,
+        "bounded_generation_passed": bounded_generation_passed,
         "bench_passed": bench_result["returncode"] == 0,
         "cli": cli_result,
         "bench": bench_result,

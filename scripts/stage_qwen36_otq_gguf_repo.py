@@ -59,6 +59,15 @@ VARIANTS = (
         allocation="Q4_K bulk MLP, Q5_K/Q6_K attention and critical anchors, Q8_0 output-sensitive tensors",
         source_prefix="Q4",
     ),
+    Variant(
+        quant="Q5_K_M",
+        profile="OTQ-DYN-Q5_K_M",
+        title="Quality-first TurboQuant dynamic GGUF",
+        role="quality-first public release for larger unified-memory Macs",
+        target="48 GB+ preferred; measured on M1 Max 32 GB with tight headroom",
+        allocation="Q5_K bulk MLP, Q6_K attention anchors, Q8_0 output-sensitive tensors, F16 critical metadata tensors",
+        source_prefix="Q5_K_M",
+    ),
 )
 
 
@@ -373,7 +382,7 @@ def make_banner(path: Path) -> None:
     draw.text((78, 182), "Qwen3.6 27B", font=title_font, fill=(255, 255, 255, 246))
     draw.text((82, 286), "Dynamic-compatible GGUFs for stock llama.cpp on Apple Silicon", font=subtitle_font, fill=(255, 255, 255, 222))
 
-    badges = [("Q3_K_M", "13.48 GiB"), ("Q4_K_M", "16.82 GiB"), ("Metal + FA", "M1 Max validated")]
+    badges = [("Q3_K_M", "13.48 GiB"), ("Q4_K_M", "16.82 GiB"), ("Q5_K_M", "19.92 GiB"), ("Metal + FA", "M1 Max")]
     x0 = 82
     for label, value in badges:
         text = f"{label}  /  {value}"
@@ -389,10 +398,10 @@ def make_banner(path: Path) -> None:
 
 def hardware_compatibility_markdown() -> str:
     rows = [
-        ("M1 Max 32 GB", "Measured", "`Q3_K_M`; `Q4_K_M` with tighter context", "Local release validation target."),
-        ("32 GB Apple Silicon", "Expected", "`Q3_K_M`", "Capacity guidance for M-series systems with similar usable unified memory."),
-        ("48 GB Apple Silicon", "Expected", "`Q4_K_M`; future `Q5_K_M` after generation", "No benchmark claim until measured."),
-        ("64 GB+ Apple Silicon", "Expected", "`Q4_K_M`; larger native/custom candidates after runtime gates", "Quality-first track once artifacts are validated."),
+        ("M1 Max 32 GB", "Measured", "`Q3_K_M`; `Q4_K_M`; `Q5_K_M` tight", "`Q5_K_M` passed 8K gates but leaves limited app/headroom."),
+        ("32 GB Apple Silicon", "Expected", "`Q3_K_M`; `Q4_K_M` only with care", "Capacity guidance for M-series systems with similar usable unified memory."),
+        ("48 GB Apple Silicon", "Expected", "`Q4_K_M`; `Q5_K_M`", "Recommended floor for comfortable Q5 use."),
+        ("64 GB+ Apple Silicon", "Expected", "`Q5_K_M` quality-first", "Best local target for Q5 plus larger contexts and other apps."),
         ("16 GB Apple Silicon", "Not recommended", "None", "Current 27B artifacts leave too little memory headroom."),
     ]
     lines = [
@@ -406,7 +415,7 @@ def hardware_compatibility_markdown() -> str:
         [
             "",
             "Expected rows are capacity guidance, not measured benchmark claims.",
-            "`Q5_K_M` is pending until disk cleanup, generation and runtime validation are complete.",
+            "`Q5_K_M` is measured on M1 Max 32 GB, but 48 GB+ is the practical recommendation for comfortable use.",
             "",
         ]
     )
@@ -521,7 +530,7 @@ These builds target MacBook-class Apple Silicon where wall-clock time matters, e
 | Method | OpenTQ / TurboQuant-inspired dynamic tensor allocation |
 | Runtime | stock `llama.cpp` with Metal and FlashAttention |
 | Compatibility boundary | standard GGUF only; no native OpenTQ kernel required |
-| Current public variants | `Q3_K_M` compact and `Q4_K_M` balanced |
+| Current public variants | `Q3_K_M` compact, `Q4_K_M` balanced, and `Q5_K_M` quality-first |
 | Validation machine | M1 Max, 8K prefill gate, bounded generation, deterministic release suites |
 
 ## Files
@@ -537,12 +546,13 @@ These builds target MacBook-class Apple Silicon where wall-clock time matters, e
 - `OTQ`: OpenTQ, the release/tooling brand.
 - `TurboQuant`: the quantization family and design direction.
 - `DYN`: dynamic tensor-level allocation; different tensor families receive different GGUF quant types.
-- `Q3_K_M` / `Q4_K_M`: standard GGUF quant names recognized by Hugging Face and stock `llama.cpp`.
+- `Q3_K_M` / `Q4_K_M` / `Q5_K_M`: standard GGUF quant names recognized by Hugging Face and stock `llama.cpp`.
 
 ## Which File Should I Use?
 
 - `Q3_K_M`: first pick for 32 GB Apple Silicon and larger app/tool contexts.
 - `Q4_K_M`: quality-balanced pick; usable on 32 GB at moderate context, more comfortable on 48 GB+.
+- `Q5_K_M`: quality-first pick; measured on M1 Max 32 GB, but 48 GB+ is the practical target.
 
 {hardware_compatibility_markdown()}
 
@@ -575,7 +585,7 @@ These builds target MacBook-class Apple Silicon where wall-clock time matters, e
 hf download {REPO_ID} Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf --local-dir models/Qwen3.6-27B-OTQ-GGUF
 ```
 
-Use `Q3_K_M` first on 32 GB Macs. Use `Q4_K_M` when you can afford the extra memory.
+Use `Q3_K_M` first on 32 GB Macs. Use `Q4_K_M` when you can afford the extra memory. Use `Q5_K_M` for quality-first local inference when headroom matters less than fidelity.
 
 ### 2. Build llama.cpp With Metal
 
@@ -633,8 +643,8 @@ curl http://localhost:8080/v1/chat/completions \\
 | Machine class | Recommendation |
 | --- | --- |
 | 32 GB MacBook Pro / Mac Studio | Prefer `Q3_K_M` for headroom, especially with agentic prompts and other apps open. |
-| 48-64 GB Apple Silicon | Prefer `Q4_K_M` for quality-balanced local inference. |
-| 96 GB+ Apple Silicon | `Q4_K_M` is the current quality pick; future Q5/IQ4 variants can target quality-first use. |
+| 48-64 GB Apple Silicon | Prefer `Q4_K_M` for balance; use `Q5_K_M` for quality-first local inference. |
+| 96 GB+ Apple Silicon | Prefer `Q5_K_M`; larger native/custom candidates remain separate until runtime gates pass. |
 | Agent workloads with large tool context | Measure total wall-clock time. Decode-only tok/s hides prefill cost. |
 
 ## Benchmarks
@@ -670,7 +680,7 @@ The plots compare the quantized OTQ artifacts against each other on measured rel
 | Item | Status |
 | --- | --- |
 | Official Qwen3.6-27B source scores | Imported from the official model card into `benchmarks/official_qwen36_baseline.csv` |
-| OTQ `Q3_K_M` / `Q4_K_M` runtime | Measured with `llama-bench` on M1 Max |
+| OTQ `Q3_K_M` / `Q4_K_M` / `Q5_K_M` runtime | Measured with `llama-bench` on M1 Max |
 | OTQ functional release gates | Measured with deterministic smoke and extended suites |
 | Official benchmark deltas | Not claimed yet; requires running the same tasks/scoring on the GGUF artifacts |
 
@@ -737,6 +747,7 @@ This repo contains stock-compatible GGUF files. Use the filename that matches yo
 ```bash
 hf download {REPO_ID} Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf --local-dir models/Qwen3.6-27B-OTQ-GGUF
 hf download {REPO_ID} Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf --local-dir models/Qwen3.6-27B-OTQ-GGUF
+hf download {REPO_ID} Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf --local-dir models/Qwen3.6-27B-OTQ-GGUF
 ```
 
 ## llama-server
@@ -760,6 +771,7 @@ hf download {REPO_ID} Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf --local-dir models/Qwen3.6
 | Validated context | `-c 8192` |
 | First 32 GB pick | `Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf` |
 | Quality-balanced pick | `Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf` |
+| Quality-first pick | `Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf` |
 
 For Qwen-style no-thinking checks, use the same scaffold as the release gate:
 
