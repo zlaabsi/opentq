@@ -81,5 +81,7 @@ uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
 uv run opentq dynamic-gguf-profiles
 uv run python scripts/stage_qwen36_otq_gguf_repo.py
+uv run python scripts/build_qwen36_release_report.py
 uv run python scripts/stage_qwen36_otq_runtime_repos.py
+./scripts/run_qwen36_otq_eval.sh
 ```

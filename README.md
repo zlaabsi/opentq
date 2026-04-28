@@ -65,6 +65,7 @@ uv run opentq recipe qwen3.6-27b --format markdown
 uv run opentq inventory --model-id Qwen/Qwen3.6-27B
 uv run opentq dynamic-gguf-profiles
 uv run opentq dynamic-gguf-plan --profile OTQ-DYN-Q4_K_M --output artifacts/qwen36-otq-dyn-q4-k-m --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp
+uv run python scripts/build_qwen36_release_report.py
 ./scripts/launch_qwen36_dynamic_ggufs.sh
 ./scripts/status_qwen36_dynamic_ggufs.sh
 uv run opentq release-plan --recipe qwen3.6-27b --release Qwen3.6-27B-TQ4_BAL_V2

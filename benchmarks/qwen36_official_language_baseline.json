@@ -1,0 +1,32 @@
+{
+  "schema": "opentq.official_baseline.v1",
+  "model_id": "Qwen/Qwen3.6-27B",
+  "source_name": "Qwen/Qwen3.6-27B Hugging Face model card",
+  "source_url": "https://huggingface.co/Qwen/Qwen3.6-27B",
+  "retrieved_at": "2026-04-28",
+  "scope": "language",
+  "scores": [
+    {"category": "Coding Agent", "benchmark": "SWE-bench Verified", "score": 77.2, "unit": "score", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "SWE-bench Pro", "score": 53.5, "unit": "score", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "SWE-bench Multilingual", "score": 71.3, "unit": "score", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "Terminal-Bench 2.0", "score": 59.3, "unit": "score", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "SkillsBench Avg5", "score": 48.2, "unit": "score", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "QwenWebBench", "score": 1487, "unit": "elo", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "NL2Repo", "score": 36.2, "unit": "score", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "Claw-Eval Avg", "score": 72.4, "unit": "score", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "Claw-Eval Pass^3", "score": 60.6, "unit": "score", "higher_is_better": true},
+    {"category": "Coding Agent", "benchmark": "QwenClawBench", "score": 53.4, "unit": "score", "higher_is_better": true},
+    {"category": "Knowledge", "benchmark": "MMLU-Pro", "score": 86.2, "unit": "score", "higher_is_better": true},
+    {"category": "Knowledge", "benchmark": "MMLU-Redux", "score": 93.5, "unit": "score", "higher_is_better": true},
+    {"category": "Knowledge", "benchmark": "SuperGPQA", "score": 66.0, "unit": "score", "higher_is_better": true},
+    {"category": "Knowledge", "benchmark": "C-Eval", "score": 91.4, "unit": "score", "higher_is_better": true},
+    {"category": "STEM & Reasoning", "benchmark": "GPQA Diamond", "score": 87.8, "unit": "score", "higher_is_better": true},
+    {"category": "STEM & Reasoning", "benchmark": "HLE", "score": 24.0, "unit": "score", "higher_is_better": true},
+    {"category": "STEM & Reasoning", "benchmark": "LiveCodeBench v6", "score": 83.9, "unit": "score", "higher_is_better": true},
+    {"category": "STEM & Reasoning", "benchmark": "HMMT Feb 25", "score": 93.8, "unit": "score", "higher_is_better": true},
+    {"category": "STEM & Reasoning", "benchmark": "HMMT Nov 25", "score": 90.7, "unit": "score", "higher_is_better": true},
+    {"category": "STEM & Reasoning", "benchmark": "HMMT Feb 26", "score": 84.3, "unit": "score", "higher_is_better": true},
+    {"category": "STEM & Reasoning", "benchmark": "IMOAnswerBench", "score": 80.8, "unit": "score", "higher_is_better": true},
+    {"category": "STEM & Reasoning", "benchmark": "AIME26", "score": 94.1, "unit": "score", "higher_is_better": true}
+  ]
+}

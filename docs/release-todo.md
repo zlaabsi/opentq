@@ -2,21 +2,41 @@
 
 ## Benchmark Plots
 
-Add matplotlib benchmark plots to the canonical Hugging Face GGUF repo.
+Matplotlib benchmark plots are implemented for the canonical Hugging Face GGUF repo.
 
-Required charts:
+Generated charts:
 
-- `assets/benchmark-throughput.png`: `pp8192` and `tg128` comparison by variant.
-- `assets/eval-latency.png`: quality/release eval mean and p95 latency by variant.
-- `assets/artifact-size.png`: artifact size in GiB/GB by variant.
-- `assets/eval-pass-rate.png`: category pass-rate heatmap for release suites.
+- `assets/benchmark-throughput.{svg,pdf,png}`: `pp8192` and `tg128` comparison by variant.
+- `assets/eval-latency.{svg,pdf,png}`: release eval mean and p95 latency by variant.
+- `assets/artifact-size.{svg,pdf,png}`: artifact size in GiB by variant.
+- `assets/eval-pass-rate.{svg,pdf,png}`: category pass-rate heatmap for release suites.
+- `assets/tensor-allocation.{svg,pdf,png}`: GGUF tensor-type allocation by variant.
+- `assets/official-language-baseline.{svg,pdf,png}`: official Qwen3.6-27B reference scores.
+
+Generate them with:
+
+```bash
+uv run python scripts/build_qwen36_release_report.py
+```
 
 Rules:
 
 - Use the JSON evidence already published in `evidence/<quant>/`.
 - Plot wall-clock/eval latency separately from decode-only throughput.
-- Export PNG and SVG when possible.
+- Export SVG/PDF/PNG plus CSV tables under `benchmarks/`.
 - Keep charts reproducible from a script, not manually generated.
+
+## Official Baseline
+
+Do not run the BF16 GGUF locally just to obtain quality baselines. Use Qwen's official scores as the external baseline and run OTQ artifacts only.
+
+Run OTQ-only comparison/eval probes with:
+
+```bash
+./scripts/run_qwen36_otq_eval.sh
+```
+
+Baseline data lives in `benchmarks/qwen36_official_language_baseline.json`. See `docs/llm-benchmark-protocol.md`.
 
 ## Hugging Face Organization
 

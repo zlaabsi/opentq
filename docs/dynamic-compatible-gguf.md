@@ -72,6 +72,15 @@ PROFILES="OTQ-DYN-Q3_K_M" ./scripts/launch_qwen36_dynamic_release.sh
 ./scripts/status_qwen36_dynamic_ggufs.sh
 ```
 
+For the canonical multi-file Hugging Face repo, stage from existing validated artifacts:
+
+```bash
+uv run python scripts/stage_qwen36_otq_gguf_repo.py \
+  --banner "/Users/zlaabsi/Downloads/ChatGPT Image Apr 28, 2026, 01_45_35 AM.png"
+```
+
+This also generates benchmark plots and CSV tables from the evidence JSON.
+
 Disable upload for a local dry release:
 
 ```bash
