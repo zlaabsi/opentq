@@ -382,6 +382,31 @@ def make_banner(path: Path) -> None:
     image.save(path, optimize=True)
 
 
+def hardware_compatibility_markdown() -> str:
+    rows = [
+        ("M1 Max 32 GB", "Measured", "`Q3_K_M`; `Q4_K_M` with tighter context", "Local release validation target."),
+        ("32 GB Apple Silicon", "Expected", "`Q3_K_M`", "Capacity guidance for M-series systems with similar usable unified memory."),
+        ("48 GB Apple Silicon", "Expected", "`Q4_K_M`; future `Q5_K_M` after generation", "No benchmark claim until measured."),
+        ("64 GB+ Apple Silicon", "Expected", "`Q4_K_M`; larger native/custom candidates after runtime gates", "Quality-first track once artifacts are validated."),
+        ("16 GB Apple Silicon", "Not recommended", "None", "Current 27B artifacts leave too little memory headroom."),
+    ]
+    lines = [
+        "## Hardware Compatibility",
+        "",
+        "| Hardware | Status | Recommended artifact | Notes |",
+        "| --- | --- | --- | --- |",
+    ]
+    lines.extend(f"| {hardware} | {status} | {artifact} | {notes} |" for hardware, status, artifact, notes in rows)
+    lines.extend(
+        [
+            "",
+            "Expected rows are capacity guidance, not measured benchmark claims.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def readme(records: list[dict[str, Any]]) -> str:
     file_rows = []
     for record in records:
@@ -463,6 +488,8 @@ These builds target MacBook-class Apple Silicon where wall-clock time matters, e
 
 - `Q3_K_M`: first pick for 32 GB Apple Silicon and larger app/tool contexts.
 - `Q4_K_M`: quality-balanced pick; usable on 32 GB at moderate context, more comfortable on 48 GB+.
+
+{hardware_compatibility_markdown()}
 
 ## Model Overview
 

@@ -132,3 +132,14 @@ def test_prepare_hf_gguf_release_supports_stock_compatible_dynamic(tmp_path: Pat
     readme = (tmp_path / "hf" / "README.md").read_text(encoding="utf-8")
     assert "standard GGUF tensor types only" in readme
     assert "Custom OpenTQ runtime: not required" in readme
+
+
+def test_canonical_readme_contains_hardware_compatibility_table(tmp_path: Path) -> None:
+    from scripts.stage_qwen36_otq_gguf_repo import hardware_compatibility_markdown
+
+    markdown = hardware_compatibility_markdown()
+
+    assert "| Hardware | Status | Recommended artifact | Notes |" in markdown
+    assert "| M1 Max 32 GB | Measured | `Q3_K_M`" in markdown
+    assert "| 16 GB Apple Silicon | Not recommended | None" in markdown
+    assert "Expected rows are capacity guidance, not measured benchmark claims." in markdown
