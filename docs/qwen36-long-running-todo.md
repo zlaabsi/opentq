@@ -36,7 +36,7 @@ This is the operational checklist for the Qwen3.6-27B release/evaluation run. Th
 - [ ] Phase 7: Re-stage and gate `Qwen3.6-27B-OTQ-Packed`; upload only with `HF_UPLOAD=1` and runtime evidence.
 - [ ] Phase 8: Re-stage and gate `Qwen3.6-27B-OTQ-Metal-GGUF`; upload only with `HF_UPLOAD=1` and runtime evidence.
 - [x] Phase 9: Build cleanup manifest and delete only approved regenerable cache paths.
-- [ ] Phase 10: Write final release report with git hash, HF inventory, runtime evidence, benchmark subset summary, and cleanup decisions.
+- [x] Phase 10: Write final release report with git hash, HF inventory, runtime evidence, benchmark subset summary, and cleanup decisions.
 
 ## Benchmark Groups
 

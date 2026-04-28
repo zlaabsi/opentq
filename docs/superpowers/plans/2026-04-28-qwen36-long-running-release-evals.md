@@ -723,7 +723,7 @@ Stop before running if any selected path contains the only local copy of an unpu
 
 ## Phase 10: Final Release Report
 
-- [ ] **Step 10.1: Capture final repo state**
+- [x] **Step 10.1: Capture final repo state**
 
 Run:
 
@@ -738,7 +738,7 @@ Expected:
 Local changes and recent commits are visible.
 ```
 
-- [ ] **Step 10.2: Capture HF artifact inventory**
+- [x] **Step 10.2: Capture HF artifact inventory**
 
 Run:
 
@@ -752,7 +752,7 @@ Expected:
 Remote file list includes README, BENCHMARKS, GGUF files, evidence, assets, and manifests.
 ```
 
-- [ ] **Step 10.3: Write final local report**
+- [x] **Step 10.3: Write final local report**
 
 Create `artifacts/release-audit/qwen36-final-release-report.md` with:
 
@@ -777,6 +777,14 @@ Expected:
 ```text
 The report can be read without chat context.
 ```
+
+Result:
+
+```text
+artifacts/release-audit/qwen36-final-release-report.md
+```
+
+The report records commit `127c2519e583c98e4e2665bce10ca3c13f328afb`, the current remote HF inventory, Q5 local runtime evidence, cleanup decisions, and remaining manual blockers.
 
 ## Resume Commands
 
