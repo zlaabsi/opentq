@@ -94,7 +94,7 @@ All benchmark families requested by the user are explicitly classified in `bench
 - `scripts/stage_qwen36_otq_gguf_repo.py`: existing canonical GGUF staging script.
 - `scripts/stage_qwen36_otq_runtime_repos.py`: existing Packed and Metal staging script.
 - `scripts/build_qwen36_cleanup_manifest.py`: existing deletion candidate manifest builder.
-- `scripts/run_qwen36_benchmark_subsets.py`: create in Phase 3; runs the benchmark matrix subsets and writes per-model JSON evidence.
+- `scripts/run_qwen36_benchmark_subsets.py`: create in Phase 3; plans benchmark matrix subsets in `--dry-run` mode and refuses score JSON output until Phase 4 adapters exist.
 - `scripts/build_qwen36_degradation_report.py`: create in Phase 5; merges official baselines, OTQ subset runs, optional BF16 mini-runs, and reporting disclaimers.
 - `artifacts/qwen3.6-27b-benchmark-subsets/`: generated benchmark subset evidence.
 - `artifacts/qwen3.6-27b-degradation-report/`: generated degradation summary for local review and Hugging Face card input.
@@ -295,9 +295,9 @@ Expected:
 wrote publication-grade benchmark report assets under artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF-next
 ```
 
-## Phase 3: Benchmark Subset Harness
+## Phase 3: Benchmark Subset Planner
 
-- [ ] **Step 3.1: Create benchmark subset runner**
+- [ ] **Step 3.1: Create benchmark subset dry-run planner**
 
 Create `scripts/run_qwen36_benchmark_subsets.py` with these responsibilities:
 
@@ -308,8 +308,8 @@ Create `scripts/run_qwen36_benchmark_subsets.py` with these responsibilities:
   - `q4`: `artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf`
 - Skip `blocked_modality` rows and record the blocked reason in the output JSON.
 - Skip `judge_based` rows unless `--allow-judge` is present.
-- For `mini_bf16_required` and `official_comparable` rows, run only fixed-limit samples and record `sample_count`, `task_ids`, `scoring_rule`, `prompt_format`, `temperature`, `ctx_size`, `max_tokens`, `runtime_seconds`, and `passed`.
-- Write one JSON per model under `artifacts/qwen3.6-27b-benchmark-subsets/<model>.json`.
+- For `mini_bf16_required` and `official_comparable` rows, print the fixed-limit sample counts and claim rules.
+- Refuse non-`--dry-run` execution with a clear message until Phase 4 adapters exist. This prevents fake score JSONs.
 
 Initial command:
 
@@ -353,7 +353,28 @@ All benchmark matrix tests pass.
 
 ## Phase 4: Benchmark Subset Runs
 
-- [ ] **Step 4.1: Run quick OTQ benchmark subsets**
+- [ ] **Step 4.1: Implement benchmark execution adapters**
+
+Extend `scripts/run_qwen36_benchmark_subsets.py` before running this phase:
+
+- Add task adapters for multiple-choice, exact numeric answer, code execution, and rule-based instruction-following samples.
+- Record `task_ids`, `dataset_revision`, `prompt_format`, `scoring_rule`, `temperature`, `ctx_size`, `max_tokens`, `runtime_seconds`, and `passed`.
+- Keep judge-based and multimodal rows skipped unless their explicit gates are enabled.
+- Write one score JSON per model under `artifacts/qwen3.6-27b-benchmark-subsets/<model>.json`.
+
+Run:
+
+```bash
+uv run pytest tests/test_qwen36_benchmark_matrix.py -q
+```
+
+Expected:
+
+```text
+All benchmark matrix and runner tests pass.
+```
+
+- [ ] **Step 4.2: Run quick OTQ benchmark subsets**
 
 Run:
 
@@ -373,7 +394,7 @@ artifacts/qwen3.6-27b-benchmark-subsets/q3.json
 artifacts/qwen3.6-27b-benchmark-subsets/q4.json
 ```
 
-- [ ] **Step 4.2: Run optional judge-based sentinels only when configured**
+- [ ] **Step 4.3: Run optional judge-based sentinels only when configured**
 
 Run only if a local judge endpoint and judge prompt are pinned:
 
@@ -396,7 +417,7 @@ Expected:
 Judge-based rows are marked as local sentinels, not official benchmark deltas.
 ```
 
-- [ ] **Step 4.3: Run optional BF16 mini sidecar only with explicit opt-in**
+- [ ] **Step 4.4: Run optional BF16 mini sidecar only with explicit opt-in**
 
 Run only when remote or local BF16 capacity is explicitly available:
 

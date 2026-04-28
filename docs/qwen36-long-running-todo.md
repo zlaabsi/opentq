@@ -26,8 +26,8 @@ This is the operational checklist for the Qwen3.6-27B release/evaluation run. Th
 - [x] Phase 0: Preflight repo state, disk headroom, llama.cpp binaries, and focused tests.
 - [x] Phase 1: Refresh artifact audit, M1 Max 32GB runtime gates, canonical GGUF staging, and naming checks.
 - [x] Phase 2: Re-run deterministic OTQ micro-evals and rebuild GGUF benchmark plots/CSVs.
-- [ ] Phase 3: Add `scripts/run_qwen36_benchmark_subsets.py` plus tests for the benchmark matrix.
-- [ ] Phase 4: Run quick OTQ benchmark subsets for Q3 and Q4 across the requested benchmark families.
+- [x] Phase 3: Add `scripts/run_qwen36_benchmark_subsets.py` dry-run planner plus tests for the benchmark matrix.
+- [ ] Phase 4: Implement benchmark adapters, then run quick OTQ benchmark subsets for Q3 and Q4 across the requested benchmark families.
 - [ ] Phase 5: Add degradation report builder and produce `artifacts/qwen3.6-27b-degradation-report/`.
 - [ ] Phase 6: Decide whether Q5_K_M can be generated; skip if free disk is below `80 GiB`.
 - [ ] Phase 7: Re-stage and gate `Qwen3.6-27B-OTQ-Packed`; upload only with `HF_UPLOAD=1` and runtime evidence.
