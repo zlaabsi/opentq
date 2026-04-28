@@ -35,6 +35,8 @@ def build_cli_command(model: Path, prompt: str, config: RuntimeConfig) -> list[s
         "99",
         "-fa",
         "on",
+        "-no-cnv",
+        "--simple-io",
     ]
 
 

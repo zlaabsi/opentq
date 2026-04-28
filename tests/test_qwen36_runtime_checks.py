@@ -29,6 +29,8 @@ def test_build_cli_command_uses_metal_fa_and_prompt(tmp_path: Path) -> None:
         "99",
         "-fa",
         "on",
+        "-no-cnv",
+        "--simple-io",
     ]
 
 
