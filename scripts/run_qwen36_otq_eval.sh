@@ -15,15 +15,24 @@ TIMEOUT="${TIMEOUT:-1800}"
 PROMPT_FORMAT="${PROMPT_FORMAT:-qwen3-no-think}"
 MAX_SAMPLES="${MAX_SAMPLES:-}"
 
-declare -A MODELS=(
-  ["OTQ-DYN-Q3_K_M"]="artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf"
-  ["OTQ-DYN-Q4_K_M"]="artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf"
-)
+model_path_for_label() {
+  case "$1" in
+    OTQ-DYN-Q3_K_M)
+      printf '%s\n' "artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf"
+      ;;
+    OTQ-DYN-Q4_K_M)
+      printf '%s\n' "artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
 
 mkdir -p "$OUTPUT_ROOT"
 
 for label in OTQ-DYN-Q3_K_M OTQ-DYN-Q4_K_M; do
-  gguf="${MODELS[$label]}"
+  gguf="$(model_path_for_label "$label")"
   output="$OUTPUT_ROOT/$label.json"
   if [[ ! -f "$gguf" ]]; then
     echo "skip $label: missing $gguf"
