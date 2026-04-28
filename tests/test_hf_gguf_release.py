@@ -143,3 +143,12 @@ def test_canonical_readme_contains_hardware_compatibility_table(tmp_path: Path) 
     assert "| M1 Max 32 GB | Measured | `Q3_K_M`" in markdown
     assert "| 16 GB Apple Silicon | Not recommended | None" in markdown
     assert "Expected rows are capacity guidance, not measured benchmark claims." in markdown
+
+
+def test_stage_gguf_first_existing_supports_absolute_globs(tmp_path: Path) -> None:
+    from scripts.stage_qwen36_otq_gguf_repo import first_existing
+
+    expected = tmp_path / "Qwen3.6-27B-OTQ-DYN-Q3_K_M-GGUF"
+    expected.mkdir()
+
+    assert first_existing([str(tmp_path / "Qwen3.6-27B-OTQ-DYN-Q3_K_M*-GGUF")]) == expected

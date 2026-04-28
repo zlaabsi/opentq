@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import math
 import os
@@ -114,7 +115,10 @@ def sanitize_public_value(value: Any, variant: Variant) -> Any:
 def first_existing(patterns: list[str]) -> Path:
     matches: list[Path] = []
     for pattern in patterns:
-        matches.extend(Path().glob(pattern))
+        if Path(pattern).is_absolute():
+            matches.extend(Path(match) for match in glob.glob(pattern))
+        else:
+            matches.extend(Path().glob(pattern))
     existing = sorted(path for path in matches if path.exists())
     if not existing:
         raise FileNotFoundError("missing artifact for patterns: " + ", ".join(patterns))
