@@ -31,7 +31,7 @@ def test_build_cli_command_uses_metal_fa_and_prompt(tmp_path: Path) -> None:
         "on",
         "--no-warmup",
         "-no-cnv",
-        "--simple-io",
+        "--single-turn",
     ]
 
 

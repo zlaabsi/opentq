@@ -37,7 +37,7 @@ def build_cli_command(model: Path, prompt: str, config: RuntimeConfig) -> list[s
         "on",
         "--no-warmup",
         "-no-cnv",
-        "--simple-io",
+        "--single-turn",
     ]
 
 
