@@ -38,14 +38,16 @@ It evaluates only the OTQ release artifacts. It does not run the BF16 GGUF.
 
 ## Public Benchmark Families To Add
 
-The next quality gate should run at least a fixed-limit subset of:
+The long-running benchmark matrix lives in `benchmarks/qwen36_long_running_benchmark_matrix.json`.
 
-- MMLU-Pro for broad knowledge/reasoning;
-- GPQA Diamond for hard STEM reasoning;
-- LiveCodeBench or MBPP/HumanEval for coding;
-- SWE-bench style agentic coding if the harness is available;
-- IFEval for instruction following;
-- LongBench or a local long-context needle set for context retention.
+The requested benchmark families are split into four claim classes:
+
+- `official_comparable`: MMLU-Pro, AIME when AIME26-compatible, SWE-bench when the real split/harness is used, LiveCodeBench when v6-compatible, and GPQA when Diamond-compatible.
+- `mini_bf16_required`: MMLU, ARC, HellaSwag, GSM8K, MATH, HumanEval, MBPP, BIG-Bench Hard, IFEval, TruthfulQA, WinoGrande, DROP, PIQA, and CommonsenseQA.
+- `judge_based`: MT-Bench, Chatbot Arena style, and AlpacaEval. Treat these as OTQ usability sentinels unless a pinned judge and matching BF16 sidecar are recorded.
+- `blocked_modality`: MMMU and MathVista for the current text-only GGUF track.
+
+Run fixed-limit OTQ subsets first. Only add BF16 mini-runs when the cost and hardware are explicit.
 
 For every task, record:
 

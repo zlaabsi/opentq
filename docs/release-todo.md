@@ -1,5 +1,15 @@
 # OpenTQ Release TODO
 
+## Long-Running Qwen3.6 Release Work
+
+The multi-hour execution plan for finishing Qwen3.6 release, runtime, benchmark subset, degradation report, and cleanup work is:
+
+- `docs/superpowers/plans/2026-04-28-qwen36-long-running-release-evals.md`
+- `docs/qwen36-long-running-todo.md`
+- `benchmarks/qwen36_long_running_benchmark_matrix.json`
+
+Use those files as the source of truth after chat compaction or machine restart.
+
 ## Benchmark Plots
 
 Matplotlib benchmark plots are implemented for the canonical Hugging Face GGUF repo.

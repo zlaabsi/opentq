@@ -1,0 +1,271 @@
+{
+  "schema": "opentq.qwen36_long_running_benchmark_matrix.v1",
+  "model_id": "Qwen/Qwen3.6-27B",
+  "retrieved_at": "2026-04-28",
+  "official_source": "https://huggingface.co/Qwen/Qwen3.6-27B",
+  "purpose": "Classify the requested benchmark families for long-running OTQ subset runs and prevent unsupported degradation claims.",
+  "comparison_rules": {
+    "official_comparable": "A delta against the official Qwen score may be reported only when the OTQ run uses the same task family, compatible split, prompt/scoring rule, and sample policy.",
+    "mini_bf16_required": "No official Qwen score is available for this exact family in the current model card. Report degradation only after a matching BF16 mini-run is available, or publish OTQ-only pass rate/latency.",
+    "judge_based": "Use only as an OTQ usability sentinel unless a stable local judge, judge model, prompt template, and BF16 sidecar run are recorded.",
+    "blocked_modality": "The current public GGUF track is text-only. Do not run or claim multimodal degradation until a vision-capable export/runtime is release-gated."
+  },
+  "default_subset_policy": {
+    "quick_samples_per_family": 16,
+    "reasoning_samples_per_family": 24,
+    "coding_samples_per_family": 12,
+    "agentic_samples_per_family": 3,
+    "judge_samples_per_family": 12,
+    "temperature": 0.0,
+    "ctx_size": 8192,
+    "max_tokens_short": 512,
+    "max_tokens_reasoning": 4096,
+    "max_tokens_coding": 4096
+  },
+  "benchmarks": [
+    {
+      "id": "mmlu",
+      "name": "MMLU",
+      "family": "knowledge",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 deterministic multiple-choice samples across STEM, humanities, social science, and professional domains.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "mmlu_pro",
+      "name": "MMLU-Pro",
+      "family": "knowledge",
+      "requested_by_user": true,
+      "comparison_mode": "official_comparable",
+      "official_baseline": {"benchmark": "MMLU-Pro", "score": 86.2, "unit": "score"},
+      "subset_policy": "24 fixed samples covering the official categories where possible.",
+      "claim_rule": "A delta versus 86.2 is allowed only when the subset metadata records MMLU-Pro-compatible task/scoring."
+    },
+    {
+      "id": "arc",
+      "name": "ARC",
+      "family": "commonsense_science",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 ARC-Challenge style multiple-choice science questions.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "hellaswag",
+      "name": "HellaSwag",
+      "family": "commonsense",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 fixed continuation-selection samples.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "gsm8k",
+      "name": "GSM8K",
+      "family": "math",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 grade-school arithmetic word problems with exact final-answer scoring.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "math",
+      "name": "MATH",
+      "family": "math",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 fixed algebra, number theory, geometry, and counting samples with boxed-answer extraction.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "aime",
+      "name": "AIME",
+      "family": "math",
+      "requested_by_user": true,
+      "comparison_mode": "official_comparable",
+      "official_baseline": {"benchmark": "AIME26", "score": 94.1, "unit": "score"},
+      "subset_policy": "Use AIME 2026 samples when available; otherwise label the run as AIME-style and do not compare to 94.1.",
+      "claim_rule": "A delta versus 94.1 is allowed only for AIME 2026 I/II-compatible scoring."
+    },
+    {
+      "id": "humaneval",
+      "name": "HumanEval",
+      "family": "coding",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "12 deterministic Python tasks with pass/fail unit tests.",
+      "claim_rule": "Publish OTQ-only pass@1 subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "mbpp",
+      "name": "MBPP",
+      "family": "coding",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "12 deterministic Python tasks with unit-test execution.",
+      "claim_rule": "Publish OTQ-only pass@1 subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "swe_bench",
+      "name": "SWE-bench",
+      "family": "agentic_coding",
+      "requested_by_user": true,
+      "comparison_mode": "official_comparable",
+      "official_baseline": {"benchmark": "SWE-bench Verified", "score": 77.2, "unit": "score"},
+      "additional_official_baselines": [
+        {"benchmark": "SWE-bench Pro", "score": 53.5, "unit": "score"},
+        {"benchmark": "SWE-bench Multilingual", "score": 71.3, "unit": "score"}
+      ],
+      "subset_policy": "3 small verified tasks max in quick mode; record harness, timeout, context length, and patch success.",
+      "claim_rule": "A public delta is allowed only for the real SWE-bench harness and matching split label."
+    },
+    {
+      "id": "livecodebench",
+      "name": "LiveCodeBench",
+      "family": "coding",
+      "requested_by_user": true,
+      "comparison_mode": "official_comparable",
+      "official_baseline": {"benchmark": "LiveCodeBench v6", "score": 83.9, "unit": "score"},
+      "subset_policy": "12 v6-compatible tasks when available; record date range and exact task ids.",
+      "claim_rule": "A delta versus 83.9 is allowed only for v6-compatible scoring."
+    },
+    {
+      "id": "bbh",
+      "name": "BIG-Bench Hard (BBH)",
+      "family": "reasoning",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "24 fixed samples across at least 6 BBH subtasks.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "gpqa",
+      "name": "GPQA",
+      "family": "stem_reasoning",
+      "requested_by_user": true,
+      "comparison_mode": "official_comparable",
+      "official_baseline": {"benchmark": "GPQA Diamond", "score": 87.8, "unit": "score"},
+      "subset_policy": "24 GPQA Diamond-compatible samples where licensing/access allows.",
+      "claim_rule": "A delta versus 87.8 is allowed only for Diamond-compatible scoring."
+    },
+    {
+      "id": "mt_bench",
+      "name": "MT-Bench",
+      "family": "judge_based_chat",
+      "requested_by_user": true,
+      "comparison_mode": "judge_based",
+      "official_baseline": null,
+      "subset_policy": "12 prompts max, local judge config pinned, no public degradation claim without BF16 sidecar.",
+      "claim_rule": "Publish as judge-based OTQ usability signal, not as official degradation."
+    },
+    {
+      "id": "chatbot_arena",
+      "name": "Chatbot Arena",
+      "family": "arena",
+      "requested_by_user": true,
+      "comparison_mode": "judge_based",
+      "official_baseline": null,
+      "subset_policy": "Use only an arena-style local pairwise sentinel; official LMSYS Arena cannot be reproduced locally.",
+      "claim_rule": "Do not claim official Chatbot Arena performance."
+    },
+    {
+      "id": "alpacaeval",
+      "name": "AlpacaEval",
+      "family": "judge_based_instruction",
+      "requested_by_user": true,
+      "comparison_mode": "judge_based",
+      "official_baseline": null,
+      "subset_policy": "12 prompts max with pinned judge and baseline responses; no public degradation claim without BF16 sidecar.",
+      "claim_rule": "Publish as judge-based OTQ usability signal, not as official degradation."
+    },
+    {
+      "id": "ifeval",
+      "name": "IFEval",
+      "family": "instruction_following",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "24 fixed instruction-following prompts with rule-based checks.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "mmmu",
+      "name": "MMMU",
+      "family": "vision_language",
+      "requested_by_user": true,
+      "comparison_mode": "blocked_modality",
+      "official_baseline": {"benchmark": "MMMU", "score": 82.9, "unit": "score"},
+      "subset_policy": "Blocked for text-only GGUF. Enable only after a vision-capable release path exists.",
+      "claim_rule": "Do not claim multimodal degradation for current text-only artifacts."
+    },
+    {
+      "id": "mathvista",
+      "name": "MathVista",
+      "family": "vision_math",
+      "requested_by_user": true,
+      "comparison_mode": "blocked_modality",
+      "official_baseline": {"benchmark": "MathVista mini", "score": 87.4, "unit": "score"},
+      "subset_policy": "Blocked for text-only GGUF. Enable only after a vision-capable release path exists.",
+      "claim_rule": "Do not claim multimodal degradation for current text-only artifacts."
+    },
+    {
+      "id": "truthfulqa",
+      "name": "TruthfulQA",
+      "family": "truthfulness",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 multiple-choice or generation samples with scorer mode recorded.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "winogrande",
+      "name": "WinoGrande",
+      "family": "commonsense",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 fixed pronoun-resolution samples.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "drop",
+      "name": "DROP",
+      "family": "reading_comprehension",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 fixed numerical reading-comprehension samples with exact/fuzzy numeric scoring.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "piqa",
+      "name": "PIQA",
+      "family": "commonsense_physical",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 fixed physical commonsense multiple-choice samples.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    },
+    {
+      "id": "commonsenseqa",
+      "name": "CommonsenseQA",
+      "family": "commonsense",
+      "requested_by_user": true,
+      "comparison_mode": "mini_bf16_required",
+      "official_baseline": null,
+      "subset_policy": "16 fixed multiple-choice commonsense samples.",
+      "claim_rule": "Publish OTQ-only subset score unless a matching BF16 mini-run is recorded."
+    }
+  ]
+}
