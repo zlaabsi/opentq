@@ -6,7 +6,7 @@ This protocol separates public release gates from quality claims.
 
 Do not rerun the BF16 model locally just to obtain quality baselines. Qwen already publishes the Qwen3.6-27B reference scores in the official model card. Those values are the external BF16/source baseline for public reporting.
 
-Local BF16 runs are only useful for hardware-specific runtime questions, for example M1 Max prefill wall-clock behavior. They are not required for the model quality release report.
+Local BF16 runs are only useful for hardware-specific runtime questions, for example M1 Max prefill wall-clock behavior. They are not required for the model quality release report. For Qwen3.6-27B on M1 Max 32 GB, a local BF16 quality sidecar has low practical value because the full BF16 model is larger than comfortable unified-memory headroom; use the official baseline unless a paid or remote BF16 run is explicitly approved.
 
 ## What Can Be Claimed Today
 
@@ -17,8 +17,9 @@ The public `Qwen3.6-27B-OTQ-GGUF` repo has:
 - deterministic release micro-suite results;
 - per-category pass-rate plots from the release suite;
 - imported official Qwen baseline scores for context.
+- practical Q3/Q4 mini-subset scores with no fake full-benchmark delta.
 
-That is enough to publish a usable GGUF release. It is not enough to claim parity on MMLU-Pro, GPQA Diamond, SWE-bench, LiveCodeBench, or any other official benchmark until those benchmark tasks are run on the OTQ artifacts.
+That is enough to publish a usable GGUF release. It is not enough to claim parity on MMLU-Pro, GPQA Diamond, SWE-bench, LiveCodeBench, or any other official benchmark until those benchmark tasks are run on the OTQ artifacts with the matching split, prompt format and scoring rule.
 
 ## OTQ-vs-Official Comparison
 

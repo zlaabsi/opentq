@@ -8,6 +8,7 @@ from scripts.build_qwen36_cleanup_manifest import classify_path, inspect_path
 def test_classify_path_marks_uploaded_verified() -> None:
     assert classify_path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF", True, True) == "uploaded-verified"
     assert classify_path("artifacts/qwen3.6-27b-source/Qwen3.6-27B-BF16.gguf", False, False) == "blocked"
+    assert classify_path("~/.cache/huggingface/hub/models--Qwen--Qwen3.6-27B", False, False) == "regenerable-cache"
     assert classify_path("artifacts/tmp", False, True) == "regenerable"
 
 

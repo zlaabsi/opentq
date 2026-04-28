@@ -19,6 +19,14 @@
 - No deletion was performed. Free disk is about `10 GiB`; `hf cache scan --dir ~/.cache/huggingface/hub` reports `Qwen/Qwen3.6-27B` at `55.6G` and the Xet cache is about `4.7G`. Cleanup still requires manifest review plus explicit deletion enablement.
 - Remaining quality gates: SWE-bench and LiveCodeBench need real harness adapters; judge-based MT-Bench, Chatbot Arena, and AlpacaEval need pinned judge setup; MMMU and MathVista remain blocked for the current text-only GGUF release.
 
+## Current Status 2026-04-29
+
+- Disk cleanup was executed for regenerable Hugging Face caches only. Free disk is about `80 GiB`.
+- The local BF16 GGUF source was preserved for Q5/re-quantization.
+- The canonical HF GGUF repo was refreshed and verified remotely. The README now contains hardware compatibility, `Q5_K_M` pending status, and practical mini-subset totals: `Q3_K_M` `39/68`, `Q4_K_M` `39/68`.
+- Local BF16 sidecar remains intentionally skipped on M1 Max 32 GB; use official Qwen baseline unless paid/remote BF16 execution is explicitly approved.
+- `Q5_K_M` is now the next executable stock-GGUF candidate, but it remains unpublished until generation, smoke validation, runtime gates, and HF refresh pass.
+
 ---
 
 ## Operating Rules

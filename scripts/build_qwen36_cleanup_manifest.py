@@ -7,14 +7,26 @@ from typing import Any
 
 
 BLOCKED_NAMES = {"Qwen3.6-27B-BF16.gguf"}
+REGENERABLE_CACHE_PATTERNS = (
+    ".cache/huggingface/hub/models--Qwen--Qwen3.6-27B",
+    ".cache/huggingface/xet",
+    ".cache/huggingface/hub/models--BAAI--bge-m3",
+)
+
+
+def normalize_path(path: str) -> str:
+    return str(Path(path).expanduser())
 
 
 def classify_path(path: str, uploaded: bool, regenerable: bool) -> str:
-    name = Path(path).name
+    normalized = normalize_path(path)
+    name = Path(normalized).name
     if uploaded:
         return "uploaded-verified"
     if name in BLOCKED_NAMES:
         return "blocked"
+    if any(pattern in normalized for pattern in REGENERABLE_CACHE_PATTERNS):
+        return "regenerable-cache"
     if regenerable:
         return "regenerable"
     return "investigate"
@@ -40,6 +52,12 @@ def build_manifest(paths: list[Path]) -> list[dict[str, Any]]:
         info = inspect_path(path)
         info["classification"] = classify_path(str(path), uploaded=False, regenerable=False)
         info["delete_command"] = None
+        if info["classification"] == "regenerable-cache":
+            info["delete_command"] = f"rm -rf {path}"
+            info["decision_rationale"] = (
+                "Regenerable Hugging Face cache. Local BF16 GGUF source is preserved separately, "
+                "so this cache has lower option value than the disk it blocks."
+            )
         records.append(info)
     return records
 
@@ -56,6 +74,9 @@ def main() -> None:
         Path("artifacts/qwen3.6-27b-source"),
         Path("artifacts/hf-gguf-canonical"),
         Path("artifacts/qwen3.6-27b-gguf"),
+        Path.home() / ".cache/huggingface/hub/models--Qwen--Qwen3.6-27B",
+        Path.home() / ".cache/huggingface/xet",
+        Path.home() / ".cache/huggingface/hub/models--BAAI--bge-m3",
     ]
     existing = [path for path in paths if path.exists()]
     payload = build_manifest(existing)

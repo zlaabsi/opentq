@@ -70,6 +70,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-root", default="artifacts/qwen3.6-27b-dynamic-eval")
     parser.add_argument("--link-mode", choices=("hardlink", "copy", "symlink"), default="hardlink")
     parser.add_argument("--banner", default=os.environ.get("OPENTQ_QWEN36_BANNER"))
+    parser.add_argument("--practical-report", default="artifacts/qwen3.6-27b-degradation-report-practical/degradation-report.json")
     parser.add_argument("--skip-report", action="store_true")
     return parser.parse_args()
 
@@ -405,13 +406,63 @@ def hardware_compatibility_markdown() -> str:
         [
             "",
             "Expected rows are capacity guidance, not measured benchmark claims.",
+            "`Q5_K_M` is pending until disk cleanup, generation and runtime validation are complete.",
             "",
         ]
     )
     return "\n".join(lines)
 
 
-def readme(records: list[dict[str, Any]]) -> str:
+def format_subset_score(summary: dict[str, Any]) -> str:
+    total = int(summary.get("total", 0) or 0)
+    passed = int(summary.get("passed", 0) or 0)
+    pass_rate = float(summary.get("pass_rate", 0.0) or 0.0) * 100
+    return f"{passed}/{total} ({pass_rate:.1f}%)"
+
+
+def practical_subset_markdown(path: Path) -> str:
+    if not path.exists():
+        return "Practical mini-subset report not staged in this local checkout."
+    payload = load_json(path)
+    rows = []
+    for row in payload.get("rows", []):
+        summaries = row.get("subset_summaries") or {}
+        if not summaries:
+            continue
+        q3 = format_subset_score(summaries["q3"]) if "q3" in summaries else "pending"
+        q4 = format_subset_score(summaries["q4"]) if "q4" in summaries else "pending"
+        rows.append((row["benchmark_id"], q3, q4, row["claim_status"]))
+    if not rows:
+        return "Practical mini-subset report has no scored rows."
+    q3_passed = q3_total = q4_passed = q4_total = 0
+    for _benchmark, q3, q4, _status in rows:
+        if q3 != "pending":
+            passed, total = q3.split(" ", 1)[0].split("/", 1)
+            q3_passed += int(passed)
+            q3_total += int(total)
+        if q4 != "pending":
+            passed, total = q4.split(" ", 1)[0].split("/", 1)
+            q4_passed += int(passed)
+            q4_total += int(total)
+    lines = [
+        "These are small local release signals, not full benchmark replacements.",
+        f"Practical total: `Q3_K_M` {q3_passed}/{q3_total}; `Q4_K_M` {q4_passed}/{q4_total}.",
+        "",
+        "| Benchmark | Q3_K_M | Q4_K_M | Claim status |",
+        "| --- | ---: | ---: | --- |",
+    ]
+    lines.extend(f"| `{benchmark}` | {q3} | {q4} | `{status}` |" for benchmark, q3, q4, status in rows)
+    lines.extend(
+        [
+            "",
+            "Official degradation claims remain blocked unless the benchmark task, split, prompt format and scoring rule match the official setup, or a matching BF16 mini sidecar exists.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def readme(records: list[dict[str, Any]], practical_report: Path) -> str:
     file_rows = []
     for record in records:
         variant = record["variant"]
@@ -598,6 +649,10 @@ curl http://localhost:8080/v1/chat/completions \\
 
 The plots compare the quantized OTQ artifacts against each other on measured release data. Official Qwen scores are kept as a reference table, not plotted as a fake delta.
 
+## Practical Mini-Subset Quality Signals
+
+{practical_subset_markdown(practical_report)}
+
 ## Release Evaluation
 
 {md_eval_table(records)}
@@ -721,7 +776,7 @@ Your prompt
 """
 
 
-def benchmarks_md(records: list[dict[str, Any]]) -> str:
+def benchmarks_md(records: list[dict[str, Any]], practical_report: Path) -> str:
     return f"""# Benchmarks
 
 Benchmarks were run with stock `llama.cpp`, Metal offload and FlashAttention enabled. These are measured OTQ GGUF release results; official Qwen scores are included as a reference CSV, not as a claimed delta.
@@ -739,6 +794,10 @@ Benchmarks were run with stock `llama.cpp`, Metal offload and FlashAttention ena
 ## Functional Release Suites
 
 {md_eval_table(records)}
+
+## Practical Mini-Subset Quality Signals
+
+{practical_subset_markdown(practical_report)}
 
 ![Release gate latency](assets/release-gate-latency.png)
 
@@ -827,9 +886,10 @@ def main() -> int:
         shutil.copy2(banner_source, banner_output)
     else:
         make_banner(banner_output)
-    (output / "README.md").write_text(readme(records), encoding="utf-8")
+    practical_report = Path(args.practical_report)
+    (output / "README.md").write_text(readme(records, practical_report), encoding="utf-8")
     (output / "USAGE.md").write_text(usage_md(), encoding="utf-8")
-    (output / "BENCHMARKS.md").write_text(benchmarks_md(records), encoding="utf-8")
+    (output / "BENCHMARKS.md").write_text(benchmarks_md(records, practical_report), encoding="utf-8")
     (output / "RELEASE_NOTES.md").write_text(release_notes(records), encoding="utf-8")
     dump_json(
         output / "opentq-gguf-release.json",
