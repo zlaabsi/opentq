@@ -77,3 +77,11 @@ def test_quantize_script_supports_dry_run_and_imatrix() -> None:
     assert "--dry-run" in script
     assert "--imatrix" in script
     assert "IQ4_NL" in script
+
+
+def test_dynamic_docs_explain_iq4_nl_and_do_not_use_xl() -> None:
+    text = Path("docs/dynamic-compatible-gguf.md").read_text(encoding="utf-8")
+
+    assert "XL" not in text
+    assert "IQ4_NL is a stock llama.cpp nonlinear 4-bit quant type" in text
+    assert "requires an imatrix before release consideration" in text

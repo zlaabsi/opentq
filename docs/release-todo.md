@@ -54,3 +54,8 @@ Baseline data lives in `benchmarks/qwen36_official_language_baseline.json`. See 
 - `DYN`: dynamic tensor-level allocation with standard GGUF tensor types.
 - `Q3_K_M`, `Q4_K_M`, etc.: stock GGUF quant names.
 - Avoid internal quality labels in filenames unless they are documented and necessary.
+
+## Future Stock GGUF Candidates
+
+- `Q5_K_M`: future quality-first stock GGUF candidate after disk cleanup and runtime gates.
+- `IQ4_NL`: deferred stock llama.cpp nonlinear 4-bit experiment; do not publish without imatrix evidence.
