@@ -33,6 +33,7 @@ def build_cli_command(model: Path, prompt: str, config: RuntimeConfig) -> list[s
         "-ngl",
         "99",
         "-fa",
+        "on",
     ]
 
 
@@ -50,6 +51,7 @@ def build_bench_command(model: Path, config: RuntimeConfig) -> list[str]:
         "-ngl",
         "99",
         "-fa",
+        "1",
     ]
 
 

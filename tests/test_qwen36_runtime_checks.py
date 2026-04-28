@@ -27,6 +27,7 @@ def test_build_cli_command_uses_metal_fa_and_prompt(tmp_path: Path) -> None:
         "-ngl",
         "99",
         "-fa",
+        "on",
     ]
 
 
@@ -40,6 +41,7 @@ def test_build_bench_command_sets_prefill_and_decode(tmp_path: Path) -> None:
     assert "8192" in command
     assert "128" in command
     assert "-fa" in command
+    assert "1" in command
 
 
 def test_write_runtime_result_records_evidence(tmp_path: Path) -> None:
