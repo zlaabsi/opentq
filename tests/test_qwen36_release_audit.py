@@ -15,6 +15,7 @@ def test_audit_public_names_rejects_xl_and_otq3() -> None:
         "Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf",
         "Qwen3.6-27B-OTQ-DYN-Q3_XL-Q3_K_M.gguf",
         "Qwen3.6-27B-OTQ3_SB4",
+        "XLAHooksInterface.h",
     ]
 
     findings = audit_public_names(names)

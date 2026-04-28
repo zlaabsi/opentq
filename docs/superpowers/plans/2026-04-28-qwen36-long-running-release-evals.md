@@ -173,7 +173,7 @@ Run:
 
 ```bash
 uv run python scripts/audit_qwen36_release_state.py \
-  --root /Users/zlaabsi/Documents/GitHub/opentq \
+  --root artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF \
   --output artifacts/release-audit/qwen36-release-audit.json
 ```
 
@@ -192,7 +192,7 @@ from pathlib import Path
 p = Path("artifacts/release-audit/qwen36-release-audit.json")
 d = json.loads(p.read_text())
 print("naming_findings=", d.get("naming_findings"))
-print("gguf_variants=", sorted(d.get("gguf", {}).keys()))
+print("gguf_files=", [row["name"] for row in d.get("gguf_files", [])])
 PY
 ```
 
@@ -200,7 +200,7 @@ Expected:
 
 ```text
 naming_findings= []
-gguf_variants= ['Q3_K_M', 'Q4_K_M']
+gguf_files= ['Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf', 'Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf']
 ```
 
 - [ ] **Step 1.2: Re-run M1 Max runtime gates for stock GGUFs**
@@ -210,9 +210,8 @@ Run:
 ```bash
 for quant in Q3_K_M Q4_K_M; do
   uv run python scripts/run_qwen36_runtime_checks.py \
-    --gguf "artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-${quant}.gguf" \
-    --label "OTQ-DYN-${quant}" \
-    --hardware "M1 Max 32GB" \
+    --model "artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-${quant}.gguf" \
+    --machine "M1 Max 32GB" \
     --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp \
     --output "artifacts/release-audit/runtime-${quant}-M1_Max_32GB.json"
 done

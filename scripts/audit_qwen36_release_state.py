@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -9,12 +10,13 @@ from typing import Any
 CURRENT_DYNAMIC_PROFILES = {"OTQ-DYN-Q3_K_M", "OTQ-DYN-Q4_K_M"}
 FUTURE_DYNAMIC_PROFILES = {"OTQ-DYN-Q5_K_M"}
 DEFERRED_DYNAMIC_PROFILES = {"OTQ-DYN-IQ4_NL"}
+FORBIDDEN_XL_LABEL = re.compile(r"(^|[-_.])XL($|[-_.])")
 
 
 def audit_public_names(names: list[str]) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     for name in names:
-        if "XL" in name:
+        if FORBIDDEN_XL_LABEL.search(name):
             findings.append(
                 {
                     "severity": "error",
