@@ -157,6 +157,30 @@ def make_banner(path: Path, title: str, subtitle: str, badges: list[tuple[str, s
     image.save(path, optimize=True)
 
 
+def packed_gate_markdown() -> str:
+    return "\n".join(
+        [
+            "## Release Boundary",
+            "",
+            "`OTQ-Packed` is not a stock llama.cpp inference release. It contains OpenTQ `.otq` payloads and `opentq-pack.json` manifests for runtime/tooling integration.",
+            "",
+        ]
+    )
+
+
+def metal_gate_markdown() -> str:
+    return "\n".join(
+        [
+            "## Metal Runtime Gate",
+            "",
+            "`TQ3_SB4` is the first candidate for the required OpenTQ/Metal runtime path.",
+            "`TQ4_SB4` remains blocked until the inconsistent GGUF export size is audited.",
+            "`TQ4_BAL_V2`, `TQ4R2`, and `TQ4R4` remain blocked until fresh runtime validation exists.",
+            "",
+        ]
+    )
+
+
 def staged_packed_readme(records: list[dict[str, Any]]) -> str:
     rows = "\n".join(
         f"| `{row['public_slug']}/` | {human_gib(row['bytes'])} | {row['otq_files']} | {row['role']} | `{row['release_status']}` |"
@@ -185,6 +209,8 @@ quantized_by: zlaabsi
 OpenTQ Packed contains native TurboQuant weight artifacts for `{BASE_MODEL}`.
 
 This is **not** the stock llama.cpp GGUF track. These files require an OpenTQ loader/runtime path and should stay private or gated until the runtime is public and benchmark-gated.
+
+{packed_gate_markdown()}
 
 ## Files
 
@@ -304,6 +330,8 @@ quantized_by: zlaabsi
 This staged repo is for OpenTQ custom GGUFs that require the OpenTQ Metal runtime path.
 
 It is **not** the public stock llama.cpp repo. If users want a standard GGUF today, use `zlaabsi/Qwen3.6-27B-OTQ-GGUF`.
+
+{metal_gate_markdown()}
 
 ## Release Candidate
 
