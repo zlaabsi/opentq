@@ -6,6 +6,7 @@ import json
 import subprocess
 import tempfile
 import re
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,8 @@ import requests
 
 SCHEMA = "opentq.qwen36_benchmark_subset_eval.v1"
 DATASET_VIEWER = "https://datasets-server.huggingface.co"
+DATASET_VIEWER_RETRIES = 5
+DATASET_VIEWER_RETRY_STATUSES = {429, 500, 502, 503, 504}
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 MODEL_PATHS = {
@@ -399,19 +402,29 @@ def build_sample_from_row(adapter: BenchmarkAdapter, task_id: str, row: dict[str
 
 def fetch_dataset_viewer_row(adapter: BenchmarkAdapter, task_id: str) -> dict[str, Any]:
     offset = parse_task_offset(task_id)
-    response = requests.get(
-        f"{DATASET_VIEWER}/rows",
-        params={
-            "dataset": adapter.dataset,
-            "config": adapter.config,
-            "split": adapter.split,
-            "revision": adapter.revision,
-            "offset": offset,
-            "length": 1,
-        },
-        timeout=60,
-    )
-    response.raise_for_status()
+    params = {
+        "dataset": adapter.dataset,
+        "config": adapter.config,
+        "split": adapter.split,
+        "revision": adapter.revision,
+        "offset": offset,
+        "length": 1,
+    }
+    response = None
+    for attempt in range(1, DATASET_VIEWER_RETRIES + 1):
+        try:
+            response = requests.get(f"{DATASET_VIEWER}/rows", params=params, timeout=60)
+            if response.status_code in DATASET_VIEWER_RETRY_STATUSES and attempt < DATASET_VIEWER_RETRIES:
+                time.sleep(min(2 ** (attempt - 1), 8))
+                continue
+            response.raise_for_status()
+            break
+        except requests.RequestException:
+            if attempt >= DATASET_VIEWER_RETRIES:
+                raise
+            time.sleep(min(2 ** (attempt - 1), 8))
+    if response is None:
+        raise RuntimeError("dataset viewer request did not return a response")
     rows = response.json().get("rows", [])
     if not rows:
         raise ValueError(f"no row returned for {adapter.benchmark_id} {task_id}")
@@ -730,6 +743,14 @@ def run_model_benchmarks(
 ) -> dict[str, Any]:
     require_runtime(model, llama_cpp)
     benchmark_payloads = []
+    payload = {
+        "schema": SCHEMA,
+        "created_at": now_iso(),
+        "model": model.as_payload(),
+        "benchmarks": benchmark_payloads,
+    }
+    output_root.mkdir(parents=True, exist_ok=True)
+    target = output_root / f"{model.key}.json"
     for adapter in adapters:
         samples = [apply_max_tokens(sample, max_tokens) for sample in samples_for_adapter(adapter, max_samples=max_samples)]
         results = [run_generation(model, llama_cpp, sample, timeout_seconds) for sample in samples]
@@ -742,15 +763,7 @@ def run_model_benchmarks(
                 "summary": summarize_results(results),
             }
         )
-    payload = {
-        "schema": SCHEMA,
-        "created_at": now_iso(),
-        "model": model.as_payload(),
-        "benchmarks": benchmark_payloads,
-    }
-    output_root.mkdir(parents=True, exist_ok=True)
-    target = output_root / f"{model.key}.json"
-    target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(target)
     return payload
 

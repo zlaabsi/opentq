@@ -4,10 +4,13 @@ import json
 import subprocess
 from pathlib import Path
 
+import requests
+import scripts.run_qwen36_benchmark_subsets as runner
 from scripts.run_qwen36_benchmark_subsets import (
     ADAPTERS,
     build_sample_from_row,
     apply_max_tokens,
+    fetch_dataset_viewer_row,
     generation_binary,
     generation_command,
     ModelTarget,
@@ -242,3 +245,36 @@ def test_apply_max_tokens_caps_long_samples() -> None:
 
     assert capped["max_tokens"] == 512
     assert sample["max_tokens"] == 4096
+
+
+def test_fetch_dataset_viewer_row_retries_transient_errors(monkeypatch) -> None:
+    calls = []
+    responses = [
+        {"status": 502, "payload": {}},
+        {"status": 200, "payload": {"rows": [{"row": {"question": "q", "choices": ["a"], "answer": 0}}]}},
+    ]
+
+    class FakeResponse:
+        def __init__(self, status: int, payload: dict[str, object]) -> None:
+            self.status_code = status
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            if self.status_code >= 400:
+                raise requests.HTTPError(f"{self.status_code} error")
+
+        def json(self) -> dict[str, object]:
+            return self._payload
+
+    def fake_get(*args, **kwargs):
+        calls.append((args, kwargs))
+        item = responses.pop(0)
+        return FakeResponse(int(item["status"]), dict(item["payload"]))
+
+    monkeypatch.setattr(runner.requests, "get", fake_get)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+
+    row = fetch_dataset_viewer_row(ADAPTERS["mmlu"], "offset:0")
+
+    assert row["question"] == "q"
+    assert len(calls) == 2
