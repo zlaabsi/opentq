@@ -21,6 +21,7 @@ from opentq.hf_release import human_gib, link_file
 
 REPO_ID = "zlaabsi/Qwen3.6-27B-OTQ-GGUF"
 BASE_MODEL = "Qwen/Qwen3.6-27B"
+DEFAULT_BANNER = Path("docs/assets/qwen36-opentq-hero.png")
 
 
 @dataclass(frozen=True)
@@ -533,8 +534,9 @@ def main() -> int:
 
     banner_output = output / "assets" / "opentq-qwen36-hero.png"
     banner_output.parent.mkdir(parents=True, exist_ok=True)
-    if args.banner:
-        shutil.copy2(Path(args.banner), banner_output)
+    banner_source = Path(args.banner) if args.banner else DEFAULT_BANNER
+    if banner_source.exists():
+        shutil.copy2(banner_source, banner_output)
     else:
         make_banner(banner_output)
     (output / "README.md").write_text(readme(records), encoding="utf-8")
