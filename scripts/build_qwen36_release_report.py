@@ -76,20 +76,20 @@ def configure_matplotlib() -> None:
     plt.rcParams.update(
         {
             "font.family": "sans-serif",
-            "font.sans-serif": ["Avenir Next", "Helvetica Neue", "Inter", "DejaVu Sans"],
-            "font.size": 9.2,
-            "axes.titlesize": 13.4,
-            "axes.labelsize": 9.7,
-            "xtick.labelsize": 8.7,
-            "ytick.labelsize": 8.7,
-            "legend.fontsize": 8.3,
+            "font.sans-serif": ["DejaVu Sans", "Helvetica Neue", "Avenir Next", "Inter"],
+            "font.size": 8.0,
+            "axes.titlesize": 10.8,
+            "axes.labelsize": 8.4,
+            "xtick.labelsize": 7.5,
+            "ytick.labelsize": 7.5,
+            "legend.fontsize": 7.3,
             "figure.dpi": 150,
             "savefig.dpi": 320,
             "savefig.bbox": "tight",
             "savefig.pad_inches": 0.08,
-            "lines.linewidth": 2.2,
-            "lines.markersize": 6.5,
-            "axes.linewidth": 0.85,
+            "lines.linewidth": 1.6,
+            "lines.markersize": 5.0,
+            "axes.linewidth": 0.72,
             "axes.grid": True,
             "grid.color": PALETTE["grid"],
             "grid.alpha": 0.72,
@@ -313,7 +313,7 @@ def polish_axes(ax: plt.Axes) -> None:
 
 
 def add_title(ax: plt.Axes, title: str, subtitle: str | None = None) -> None:
-    ax.set_title(title, loc="left", fontweight="bold", fontsize=13.6, pad=18 if subtitle else 10)
+    ax.set_title(title, loc="left", fontweight="semibold", fontsize=11.2, pad=15 if subtitle else 8)
     if subtitle:
         ax.text(
             0.0,
@@ -322,7 +322,7 @@ def add_title(ax: plt.Axes, title: str, subtitle: str | None = None) -> None:
             transform=ax.transAxes,
             ha="left",
             va="bottom",
-            fontsize=8.9,
+            fontsize=7.7,
             color=PALETTE["muted"],
         )
 
@@ -338,7 +338,7 @@ def add_cell_grid(ax: plt.Axes, rows: int, cols: int, *, color: str = "#e7e1d8")
 def save_figure(fig: plt.Figure, stem: Path, caption: str | None = None) -> None:
     stem.parent.mkdir(parents=True, exist_ok=True)
     if caption:
-        fig.text(0.012, 0.014, caption, ha="left", va="bottom", fontsize=7.9, color=PALETTE["muted"])
+        fig.text(0.012, 0.014, caption, ha="left", va="bottom", fontsize=6.8, color=PALETTE["muted"])
         fig.tight_layout(pad=0.9, rect=(0.0, 0.075, 1.0, 1.0))
     else:
         fig.tight_layout(pad=0.9)
@@ -398,7 +398,7 @@ def plot_runtime_frontier(bench: list[dict[str, Any]], artifacts: list[dict[str,
             (x, y),
             textcoords="offset points",
             xytext=label_offset,
-            fontsize=8.4,
+            fontsize=7.4,
             color=PALETTE["ink"],
             ha=label_align,
             arrowprops={"arrowstyle": "-", "color": PALETTE["faint"], "lw": 0.8},
@@ -419,7 +419,7 @@ def plot_runtime_frontier(bench: list[dict[str, Any]], artifacts: list[dict[str,
         transform=ax.transAxes,
         ha="left",
         va="bottom",
-        fontsize=8.2,
+        fontsize=7.2,
         color=PALETTE["muted"],
     )
     polish_axes(ax)
@@ -479,9 +479,9 @@ def plot_eval_latency(rows: list[dict[str, Any]], stem: Path) -> None:
         label="mean",
     )
     ax.plot(x, p95, color=PALETTE["ink"], marker="o", linewidth=2.0, label="p95", zorder=3)
-    ax.bar_label(bars, labels=[f"{value:.1f}s" for value in mean], padding=3, fontsize=8.4, color=PALETTE["ink"])
+    ax.bar_label(bars, labels=[f"{value:.1f}s" for value in mean], padding=3, fontsize=7.4, color=PALETTE["ink"])
     for xi, value in zip(x, p95):
-        ax.annotate(f"{value:.1f}s", (xi, value), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8.4, color=PALETTE["ink"])
+        ax.annotate(f"{value:.1f}s", (xi, value), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=7.4, color=PALETTE["ink"])
 
     ax.set_xticks(x, labels)
     ax.set_ylabel("seconds / sample")
@@ -509,11 +509,9 @@ def plot_pass_rate(rows: list[dict[str, Any]], stem: Path) -> None:
     for i in range(len(variants)):
         for j in range(len(categories)):
             value = matrix[i, j]
-            ax.text(j, i, "n/a" if np.isnan(value) else f"{value:.0%}", ha="center", va="center", fontsize=9.2, color=PALETTE["ink"])
-            if not np.isnan(value) and value >= 0.999:
-                ax.add_patch(Rectangle((j - 0.43, i - 0.36), 0.86, 0.72, fill=False, edgecolor=PALETTE["copper"], linewidth=1.5))
+            ax.text(j, i, "n/a" if np.isnan(value) else f"{value:.0%}", ha="center", va="center", fontsize=7.9, color=PALETTE["ink"])
 
-    add_title(ax, "Release-gate coverage", "Per-category pass rate; copper outlines mark saturated categories.")
+    add_title(ax, "Release-gate coverage", "Per-category pass rate; darker cells mean stronger release-suite coverage.")
     cbar = fig.colorbar(image, ax=ax, fraction=0.035, pad=0.02)
     cbar.ax.yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
     cbar.outline.set_edgecolor(PALETTE["spine"])
@@ -550,23 +548,11 @@ def plot_release_scorecard(
     ax.set_yticks(np.arange(len(metrics)), [metric[0] for metric in metrics])
     add_cell_grid(ax, len(metrics), len(variants))
     for row_idx, (_, values, unit, _) in enumerate(metrics):
-        best_col = int(np.nanargmax(normalized[row_idx]))
         for col_idx, value in enumerate(values):
-            ax.text(col_idx, row_idx, f"{value:.2f} {unit}", ha="center", va="center", fontsize=8.2, color=PALETTE["ink"])
-            if col_idx == best_col:
-                ax.add_patch(
-                    Rectangle(
-                        (col_idx - 0.43, row_idx - 0.36),
-                        0.86,
-                        0.72,
-                        fill=False,
-                        edgecolor=PALETTE["copper"],
-                        linewidth=1.6,
-                    )
-                )
-    add_title(ax, "Release decision scorecard", "Normalized within this artifact set; copper boxes mark the strongest local tradeoff per row.")
+            ax.text(col_idx, row_idx, f"{value:.2f} {unit}", ha="center", va="center", fontsize=7.3, color=PALETTE["ink"])
+    add_title(ax, "Release decision scorecard", "Each row is normalized independently; darker cells mean stronger local release fit.")
     cbar = fig.colorbar(image, ax=ax, fraction=0.035, pad=0.02)
-    cbar.set_label("relative fit for local release", fontsize=8.2)
+    cbar.set_label("relative fit for local release", fontsize=7.4)
     cbar.outline.set_edgecolor(PALETTE["spine"])
     save_figure(fig, stem, "This matrix compares release ergonomics, not model intelligence. Quality is reported by paired benchmark subsets.")
 
@@ -651,8 +637,6 @@ def plot_allocation_policy(rows: list[dict[str, Any]], stem: Path) -> None:
         ax.set_ylim(len(categories) - 0.5, -0.5)
         ax.set_facecolor(PALETTE["paper"])
         for i in range(len(categories)):
-            row_values = np.nan_to_num(matrix[i])
-            dominant = int(np.argmax(row_values)) if row_values.any() else -1
             for j, tensor_type in enumerate(tensor_types):
                 value = matrix[i, j]
                 base = Rectangle(
@@ -678,20 +662,9 @@ def plot_allocation_policy(rows: list[dict[str, Any]], stem: Path) -> None:
                         alpha=0.18 + 0.74 * value,
                     )
                 )
-                if j == dominant and value >= 0.5:
-                    ax.add_patch(
-                        Rectangle(
-                            (j - 0.43, i - 0.38),
-                            0.86,
-                            0.76,
-                            fill=False,
-                            edgecolor=PALETTE["copper"],
-                            linewidth=1.45,
-                        )
-                    )
                 text_color = "white" if value >= 0.82 and tensor_type in {"Q3_K", "Q6_K", "Q8_0"} else PALETTE["ink"]
-                ax.text(j, i, f"{value:.0%}", ha="center", va="center", fontsize=7.4, color=text_color)
-        ax.set_title(clean_label(variant), fontweight="bold", fontsize=12.2, pad=11)
+                ax.text(j, i, f"{value:.0%}", ha="center", va="center", fontsize=6.8, color=text_color)
+        ax.set_title(clean_label(variant), fontweight="semibold", fontsize=10.2, pad=9)
         ax.set_xticks(np.arange(len(tensor_types)), tensor_types, rotation=35, ha="right")
         ax.set_yticks(np.arange(len(categories)), [category.replace("_", " ") for category in categories])
         ax.tick_params(axis="both", length=0, colors=PALETTE["ink"])
@@ -705,17 +678,17 @@ def plot_allocation_policy(rows: list[dict[str, Any]], stem: Path) -> None:
         x=0.02,
         y=1.02,
         ha="left",
-        fontweight="bold",
-        fontsize=14.0,
+        fontweight="semibold",
+        fontsize=12.0,
         color=PALETTE["ink"],
     )
     fig.text(
         0.02,
         0.935,
-        "Rows show tensor families; columns show GGUF tensor types. Copper boxes mark the dominant allocation path.",
+        "Rows show tensor families; columns show GGUF tensor types. Cell opacity is the share within each tensor family.",
         ha="left",
         va="top",
-        fontsize=8.9,
+        fontsize=7.8,
         color=PALETTE["muted"],
     )
     save_figure(fig, stem, "Family-level allocation makes the policy auditable: state and norms stay F16, projections absorb most quantization.")
@@ -762,7 +735,7 @@ def plot_quant_eval(rows: list[dict[str, Any]], stem: Path) -> None:
 
     fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.15))
     bars = axes[0].bar(x, pass_rate, color=[variant_color(row["model"]) for row in rows], edgecolor=PALETTE["paper"], linewidth=1.1)
-    axes[0].bar_label(bars, labels=[f"{value:.0%}" for value in pass_rate], padding=2, fontsize=8.4)
+    axes[0].bar_label(bars, labels=[f"{value:.0%}" for value in pass_rate], padding=2, fontsize=7.4)
     axes[0].set_xticks(x, labels, rotation=18, ha="right")
     axes[0].set_ylim(0, 1.05)
     axes[0].yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
@@ -770,7 +743,7 @@ def plot_quant_eval(rows: list[dict[str, Any]], stem: Path) -> None:
     polish_axes(axes[0])
 
     bars = axes[1].bar(x, p95, color=[variant_color(row["model"]) for row in rows], edgecolor=PALETTE["paper"], linewidth=1.1)
-    axes[1].bar_label(bars, labels=[f"{value:.1f}s" for value in p95], padding=2, fontsize=8.4)
+    axes[1].bar_label(bars, labels=[f"{value:.1f}s" for value in p95], padding=2, fontsize=7.4)
     axes[1].set_xticks(x, labels, rotation=18, ha="right")
     axes[1].set_ylabel("p95 seconds")
     add_title(axes[1], "OTQ eval latency")
