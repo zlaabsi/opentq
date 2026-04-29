@@ -1,4 +1,5 @@
-# OpenTQ
+<img width="1672" height="941" alt="image" src="https://github.com/user-attachments/assets/fb044197-9faa-4814-83d1-90b0ea39d152" />
+
 
 `OpenTQ` is an open quantization lab for low-bit weight formats inspired by the 2026 TurboQuant line of work, but designed as a public family with explicit specs, reproducible tooling, and three runtime/release targets:
 
