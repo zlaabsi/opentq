@@ -21,11 +21,14 @@ from scripts.run_qwen36_benchmark_subsets import (
     format_qwen_prompt,
     generation_binary,
     generation_command,
+    llama_server_command,
     ModelTarget,
     parse_json_list,
     parse_models,
     run_livecodebench_stdin_tests,
+    run_server_generation,
     score_benchmark_output,
+    server_binary,
     _spread_offsets,
 )
 
@@ -358,6 +361,61 @@ def test_generation_command_prefers_llama_completion(tmp_path: Path) -> None:
     assert command[0] == str(completion)
     assert "-no-cnv" in command
     assert "--no-display-prompt" in command
+
+
+def test_llama_server_command_uses_persistent_runtime_flags(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "build" / "bin"
+    bin_dir.mkdir(parents=True)
+    server = bin_dir / "llama-server"
+    server.write_text("", encoding="utf-8")
+
+    command = llama_server_command(
+        ModelTarget("q3", tmp_path / "model.gguf"),
+        tmp_path,
+        host="127.0.0.1",
+        port=18080,
+        timeout_seconds=120,
+        context_size=4096,
+        gpu_layers=99,
+    )
+
+    assert server_binary(tmp_path) == server
+    assert command[0] == str(server)
+    assert "--no-webui" in command
+    assert command[command.index("--port") + 1] == "18080"
+
+
+def test_run_server_generation_scores_completion_response(monkeypatch) -> None:
+    class FakeResponse:
+        status_code = 200
+        text = '{"content": "D"}'
+
+        def json(self) -> dict[str, object]:
+            return {"content": "D", "timings": {"predicted_ms": 12}}
+
+    calls = []
+
+    def fake_post(url, json, timeout):
+        calls.append((url, json, timeout))
+        return FakeResponse()
+
+    monkeypatch.setattr(runner.requests, "post", fake_post)
+    sample = {
+        "task_id": "offset:0",
+        "benchmark_id": "mmlu_pro",
+        "prompt": "Return D.",
+        "prompt_format": "qwen3-no-think",
+        "max_tokens": 16,
+        "scoring_rule": "multiple_choice_letter",
+        "answer": "D",
+    }
+
+    result = run_server_generation("http://127.0.0.1:18080", sample, 60, temperature=0.0, top_p=None, top_k=None, seed=None)
+
+    assert result["passed"] is True
+    assert result["server_timings"] == {"predicted_ms": 12}
+    assert calls[0][0] == "http://127.0.0.1:18080/completion"
+    assert calls[0][1]["n_predict"] == 16
 
 
 def test_apply_max_tokens_caps_long_samples() -> None:

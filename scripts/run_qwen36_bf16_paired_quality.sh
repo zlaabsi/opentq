@@ -23,6 +23,8 @@ RUN_BROAD="${RUN_BROAD:-1}"
 RUN_THINKING="${RUN_THINKING:-1}"
 RUN_PERF="${RUN_PERF:-1}"
 LLAMA_CPP="${LLAMA_CPP:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
+RUNTIME="${RUNTIME:-server}"
+SERVER_START_TIMEOUT="${SERVER_START_TIMEOUT:-1200}"
 
 mkdir -p "$LOG_ROOT"
 
@@ -50,6 +52,7 @@ init_summary() {
     echo "- Models: \`$MODELS\`"
     echo "- Critical benchmarks: \`$CRITICAL_BENCHMARK_IDS\`"
     echo "- Broad benchmarks: \`$BROAD_BENCHMARK_IDS\`"
+    echo "- Runtime: \`$RUNTIME\`"
     echo "- Policy: direct degradation claims only against local BF16 GGUF on identical task ids; official scores are anchors only."
     echo "- Stop condition: command failures are recorded; required preflight failures stop the run."
     echo
@@ -154,12 +157,12 @@ run_step required "pytest-benchmark-matrix" "uv run pytest tests/test_qwen36_ben
 run_step required "dry-run-bf16-targets" "uv run python scripts/run_qwen36_benchmark_subsets.py --dry-run --models '$MODELS' --sample-mode quick"
 check_disk_gate
 
-run_step required "paired-critical-no-think" "uv run python scripts/run_qwen36_benchmark_subsets.py --models '$MODELS' $(benchmark_args "$CRITICAL_BENCHMARK_IDS") --max-samples-per-family '$CRITICAL_SAMPLES' --max-tokens '$NO_THINK_MAX_TOKENS' --prompt-format qwen3-no-think --temperature 0 --timeout '$TIMEOUT' --output-root '$RUN_ROOT/paired-critical-no-think/subsets'"
+run_step required "paired-critical-no-think" "uv run python scripts/run_qwen36_benchmark_subsets.py --models '$MODELS' $(benchmark_args "$CRITICAL_BENCHMARK_IDS") --max-samples-per-family '$CRITICAL_SAMPLES' --max-tokens '$NO_THINK_MAX_TOKENS' --prompt-format qwen3-no-think --temperature 0 --timeout '$TIMEOUT' --runtime '$RUNTIME' --server-start-timeout '$SERVER_START_TIMEOUT' --output-root '$RUN_ROOT/paired-critical-no-think/subsets'"
 run_step required "paired-critical-no-think-report" "uv run python scripts/build_qwen36_paired_quality_report.py --subset-root '$RUN_ROOT/paired-critical-no-think/subsets' --output-root '$RUN_ROOT/paired-critical-no-think/report'"
 write_report_pointer "$RUN_ROOT/paired-critical-no-think/report"
 
 if [[ "$RUN_THINKING" == "1" ]]; then
-  run_step optional "paired-critical-thinking" "uv run python scripts/run_qwen36_benchmark_subsets.py --models '$MODELS' $(benchmark_args "$CRITICAL_BENCHMARK_IDS") --max-samples-per-family '$THINKING_SAMPLES' --max-tokens '$THINKING_MAX_TOKENS' --prompt-format qwen3-thinking --temperature 0 --timeout '$TIMEOUT' --output-root '$RUN_ROOT/paired-critical-thinking/subsets'"
+  run_step optional "paired-critical-thinking" "uv run python scripts/run_qwen36_benchmark_subsets.py --models '$MODELS' $(benchmark_args "$CRITICAL_BENCHMARK_IDS") --max-samples-per-family '$THINKING_SAMPLES' --max-tokens '$THINKING_MAX_TOKENS' --prompt-format qwen3-thinking --temperature 0 --timeout '$TIMEOUT' --runtime '$RUNTIME' --server-start-timeout '$SERVER_START_TIMEOUT' --output-root '$RUN_ROOT/paired-critical-thinking/subsets'"
   run_step optional "paired-critical-thinking-report" "uv run python scripts/build_qwen36_paired_quality_report.py --subset-root '$RUN_ROOT/paired-critical-thinking/subsets' --output-root '$RUN_ROOT/paired-critical-thinking/report'"
   write_report_pointer "$RUN_ROOT/paired-critical-thinking/report"
 else
@@ -167,7 +170,7 @@ else
 fi
 
 if [[ "$RUN_BROAD" == "1" ]]; then
-  run_step optional "paired-broad-no-think" "uv run python scripts/run_qwen36_benchmark_subsets.py --models '$MODELS' $(benchmark_args "$BROAD_BENCHMARK_IDS") --max-samples-per-family '$BROAD_SAMPLES' --max-tokens '$NO_THINK_MAX_TOKENS' --prompt-format qwen3-no-think --temperature 0 --timeout '$TIMEOUT' --output-root '$RUN_ROOT/paired-broad-no-think/subsets'"
+  run_step optional "paired-broad-no-think" "uv run python scripts/run_qwen36_benchmark_subsets.py --models '$MODELS' $(benchmark_args "$BROAD_BENCHMARK_IDS") --max-samples-per-family '$BROAD_SAMPLES' --max-tokens '$NO_THINK_MAX_TOKENS' --prompt-format qwen3-no-think --temperature 0 --timeout '$TIMEOUT' --runtime '$RUNTIME' --server-start-timeout '$SERVER_START_TIMEOUT' --output-root '$RUN_ROOT/paired-broad-no-think/subsets'"
   run_step optional "paired-broad-no-think-report" "uv run python scripts/build_qwen36_paired_quality_report.py --subset-root '$RUN_ROOT/paired-broad-no-think/subsets' --output-root '$RUN_ROOT/paired-broad-no-think/report'"
   write_report_pointer "$RUN_ROOT/paired-broad-no-think/report"
 else

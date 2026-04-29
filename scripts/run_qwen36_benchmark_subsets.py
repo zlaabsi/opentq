@@ -5,6 +5,7 @@ import argparse
 import base64
 import json
 import pickle
+import socket
 import subprocess
 import tempfile
 import re
@@ -604,6 +605,10 @@ def generation_binary(llama_cpp: Path) -> Path:
     return llama_cpp / "build" / "bin" / "llama-cli"
 
 
+def server_binary(llama_cpp: Path) -> Path:
+    return llama_cpp / "build" / "bin" / "llama-server"
+
+
 def clean_generated_text(output: str) -> str:
     cleaned = output.strip()
     while cleaned.endswith("[end of text]"):
@@ -993,6 +998,156 @@ def run_generation(
     }
 
 
+def available_tcp_port(host: str) -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind((host, 0))
+        return int(sock.getsockname()[1])
+
+
+def llama_server_command(
+    model: ModelTarget,
+    llama_cpp: Path,
+    host: str,
+    port: int,
+    timeout_seconds: int,
+    context_size: int,
+    gpu_layers: int,
+) -> list[str]:
+    return [
+        str(server_binary(llama_cpp)),
+        "-m",
+        str(model.path),
+        "-ngl",
+        str(gpu_layers),
+        "-c",
+        str(context_size),
+        "-fa",
+        "on",
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--no-webui",
+        "--log-verbosity",
+        "1",
+        "-to",
+        str(timeout_seconds),
+    ]
+
+
+def wait_for_llama_server(base_url: str, process: subprocess.Popen[Any], start_timeout_seconds: int) -> None:
+    deadline = time.monotonic() + start_timeout_seconds
+    last_error = ""
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError(f"llama-server exited before readiness with status {process.returncode}")
+        try:
+            response = requests.get(f"{base_url}/health", timeout=5)
+            if response.status_code == 200:
+                return
+            last_error = f"HTTP {response.status_code}: {response.text[-500:]}"
+        except requests.RequestException as exc:
+            last_error = str(exc)
+        time.sleep(2)
+    raise TimeoutError(f"llama-server did not become ready within {start_timeout_seconds}s: {last_error}")
+
+
+def start_llama_server(
+    model: ModelTarget,
+    llama_cpp: Path,
+    log_path: Path,
+    host: str,
+    port: int | None,
+    timeout_seconds: int,
+    start_timeout_seconds: int,
+    context_size: int,
+    gpu_layers: int,
+) -> tuple[str, subprocess.Popen[Any], Any]:
+    selected_port = port if port is not None else available_tcp_port(host)
+    command = llama_server_command(
+        model=model,
+        llama_cpp=llama_cpp,
+        host=host,
+        port=selected_port,
+        timeout_seconds=timeout_seconds,
+        context_size=context_size,
+        gpu_layers=gpu_layers,
+    )
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_file = log_path.open("w", encoding="utf-8")
+    log_file.write(" ".join(command) + "\n")
+    log_file.flush()
+    process = subprocess.Popen(command, text=True, stdout=log_file, stderr=subprocess.STDOUT)
+    base_url = f"http://{host}:{selected_port}"
+    wait_for_llama_server(base_url, process, start_timeout_seconds)
+    return base_url, process, log_file
+
+
+def stop_llama_server(process: subprocess.Popen[Any], log_file: Any) -> None:
+    try:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=30)
+    finally:
+        log_file.close()
+
+
+def run_server_generation(
+    base_url: str,
+    sample: dict[str, Any],
+    timeout_seconds: int,
+    temperature: float,
+    top_p: float | None,
+    top_k: int | None,
+    seed: int | None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "prompt": format_qwen_prompt(str(sample["prompt"]), str(sample["prompt_format"])),
+        "n_predict": int(sample["max_tokens"]),
+        "temperature": temperature,
+        "cache_prompt": False,
+        "stream": False,
+    }
+    if top_p is not None:
+        payload["top_p"] = top_p
+    if top_k is not None:
+        payload["top_k"] = top_k
+    if seed is not None:
+        payload["seed"] = seed
+    started = time.perf_counter()
+    response = requests.post(f"{base_url}/completion", json=payload, timeout=timeout_seconds)
+    elapsed = time.perf_counter() - started
+    if response.status_code != 200:
+        return {
+            "task_id": sample["task_id"],
+            "benchmark_id": sample["benchmark_id"],
+            "returncode": response.status_code,
+            "stdout_tail": "",
+            "stderr_tail": response.text[-4000:],
+            "score": {"passed": False, "reason": "server_http_error"},
+            "passed": False,
+            "elapsed_seconds": round(elapsed, 3),
+        }
+    data = response.json()
+    stdout = str(data.get("content", "")).strip()
+    score = score_benchmark_output(sample, stdout)
+    return {
+        "task_id": sample["task_id"],
+        "benchmark_id": sample["benchmark_id"],
+        "returncode": 0,
+        "stdout_tail": stdout[-4000:],
+        "stderr_tail": "",
+        "server_timings": data.get("timings", {}),
+        "score": score,
+        "passed": bool(score.get("passed")),
+        "elapsed_seconds": round(elapsed, 3),
+    }
+
+
 def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     total = len(results)
     passed = sum(1 for result in results if result.get("passed"))
@@ -1004,12 +1159,12 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def require_runtime(model: ModelTarget, llama_cpp: Path) -> None:
+def require_runtime(model: ModelTarget, llama_cpp: Path, runtime: str) -> None:
     if model.key == "bf16":
         raise ValueError("BF16 benchmark execution is intentionally not supported locally by this GGUF runner")
     if not model.path.exists():
         raise FileNotFoundError(f"missing model file: {model.path}")
-    binary = generation_binary(llama_cpp)
+    binary = server_binary(llama_cpp) if runtime == "server" else generation_binary(llama_cpp)
     if not binary.exists():
         raise FileNotFoundError(f"missing llama.cpp binary: {binary}")
 
@@ -1029,8 +1184,12 @@ def run_model_benchmarks(
     seed: int | None,
     context_size: int,
     gpu_layers: int,
+    runtime: str,
+    server_host: str,
+    server_port: int | None,
+    server_start_timeout: int,
 ) -> dict[str, Any]:
-    require_runtime(model, llama_cpp)
+    require_runtime(model, llama_cpp, runtime)
     benchmark_payloads = []
     payload = {
         "schema": SCHEMA,
@@ -1045,41 +1204,79 @@ def run_model_benchmarks(
             "context_size": context_size,
             "gpu_layers": gpu_layers,
             "timeout_seconds": timeout_seconds,
+            "runtime": runtime,
+            "server_host": server_host if runtime == "server" else None,
+            "server_port": server_port if runtime == "server" else None,
+            "server_start_timeout_seconds": server_start_timeout if runtime == "server" else None,
         },
         "benchmarks": benchmark_payloads,
     }
     output_root.mkdir(parents=True, exist_ok=True)
     target = output_root / f"{model.key}.json"
-    for adapter in adapters:
-        samples = [
-            apply_generation_overrides(sample, max_tokens=max_tokens, prompt_format=prompt_format)
-            for sample in samples_for_adapter(adapter, max_samples=max_samples)
-        ]
-        results = [
-            run_generation(
-                model,
-                llama_cpp,
-                sample,
-                timeout_seconds,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k,
-                seed=seed,
-                context_size=context_size,
-                gpu_layers=gpu_layers,
-            )
-            for sample in samples
-        ]
-        benchmark_payloads.append(
-            {
-                "benchmark_id": adapter.benchmark_id,
-                "adapter": adapter.as_plan_payload(),
-                "samples": samples,
-                "results": results,
-                "summary": summarize_results(results),
-            }
+    server: tuple[str, subprocess.Popen[Any], Any] | None = None
+    if runtime == "server":
+        server = start_llama_server(
+            model=model,
+            llama_cpp=llama_cpp,
+            log_path=output_root / "server-logs" / f"{model.key}.log",
+            host=server_host,
+            port=server_port,
+            timeout_seconds=timeout_seconds,
+            start_timeout_seconds=server_start_timeout,
+            context_size=context_size,
+            gpu_layers=gpu_layers,
         )
+        payload["generation"]["server_url"] = server[0]
         target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    try:
+        for adapter in adapters:
+            samples = [
+                apply_generation_overrides(sample, max_tokens=max_tokens, prompt_format=prompt_format)
+                for sample in samples_for_adapter(adapter, max_samples=max_samples)
+            ]
+            if runtime == "server":
+                assert server is not None
+                results = [
+                    run_server_generation(
+                        server[0],
+                        sample,
+                        timeout_seconds,
+                        temperature=temperature,
+                        top_p=top_p,
+                        top_k=top_k,
+                        seed=seed,
+                    )
+                    for sample in samples
+                ]
+            else:
+                results = [
+                    run_generation(
+                        model,
+                        llama_cpp,
+                        sample,
+                        timeout_seconds,
+                        temperature=temperature,
+                        top_p=top_p,
+                        top_k=top_k,
+                        seed=seed,
+                        context_size=context_size,
+                        gpu_layers=gpu_layers,
+                    )
+                    for sample in samples
+                ]
+            benchmark_payloads.append(
+                {
+                    "benchmark_id": adapter.benchmark_id,
+                    "adapter": adapter.as_plan_payload(),
+                    "samples": samples,
+                    "results": results,
+                    "summary": summarize_results(results),
+                }
+            )
+            target.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    finally:
+        if server is not None:
+            stop_llama_server(server[1], server[2])
     print(target)
     return payload
 
@@ -1101,6 +1298,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int)
     parser.add_argument("--context-size", type=int, default=8192)
     parser.add_argument("--gpu-layers", type=int, default=99)
+    parser.add_argument("--runtime", choices=("completion", "server"), default="completion")
+    parser.add_argument("--server-host", default="127.0.0.1")
+    parser.add_argument("--server-port", type=int)
+    parser.add_argument("--server-start-timeout", type=int, default=900)
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-judge", action="store_true")
@@ -1153,6 +1354,10 @@ def main() -> int:
                 seed=args.seed,
                 context_size=args.context_size,
                 gpu_layers=args.gpu_layers,
+                runtime=args.runtime,
+                server_host=args.server_host,
+                server_port=args.server_port,
+                server_start_timeout=args.server_start_timeout,
             )
     return 0
 

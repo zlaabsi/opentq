@@ -63,6 +63,7 @@
 - [x] Phase D: llama.cpp `llama-bench` performance pass for BF16/Q3/Q4/Q5.
 - [x] Generate paired reports after each phase.
 - [x] Use optional phases for long work so one slow section records failure without erasing earlier evidence.
+- [x] After MacBook reboot, revise the runtime to use one persistent `llama-server` per model instead of reloading `llama-completion` for every BF16 sample.
 
 ## Task 5: Verification
 
