@@ -64,6 +64,7 @@
 - [x] Generate paired reports after each phase.
 - [x] Use optional phases for long work so one slow section records failure without erasing earlier evidence.
 - [x] After MacBook reboot, revise the runtime to use one persistent `llama-server` per model instead of reloading `llama-completion` for every BF16 sample.
+- [x] After second MacBook reboot, add a RAM safety gate that refuses local BF16 GGUF on 32 GB machines unless `--allow-oversized-local-model` is explicitly set.
 
 ## Task 5: Verification
 
@@ -84,4 +85,5 @@
 - If local BF16 is high and Q3/Q4/Q5 are much lower on identical items, then the quantization or GGUF conversion is the likely culprit.
 - If no-think is bad but thinking improves both BF16 and quants, public quality claims must use thinking-mode results or explicitly say no-think practical mode.
 - If BF16 GGUF is too slow or times out on M1 Max 32GB, the next autonomous path is a remote BF16 sidecar on HF Jobs or another GPU runner; without `HF_TOKEN`, local evidence remains diagnostic.
+- Local BF16 GGUF is 50 GiB, above physical RAM on the M1 Max 32GB test machine. Treat local BF16 as unsafe here; use remote BF16 sidecar or a smaller reference artifact.
 - Publish only paired deltas with matching task ids, prompt mode, scoring rule, and generation config; official Qwen model-card scores remain context, not the denominator for quantization loss.

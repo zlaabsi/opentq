@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import pickle
 import socket
 import subprocess
@@ -27,6 +28,7 @@ DATASET_VIEWER_RETRIES = 5
 DATASET_VIEWER_RETRY_STATUSES = {429, 500, 502, 503, 504}
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 EXTERNAL_HARNESS_SCORING_RULES = {"swe_bench_verified_harness"}
+OVERSIZED_LOCAL_MODEL_RAM_FRACTION = 0.9
 
 MODEL_PATHS = {
     "q3": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf"),
@@ -609,6 +611,27 @@ def server_binary(llama_cpp: Path) -> Path:
     return llama_cpp / "build" / "bin" / "llama-server"
 
 
+def physical_memory_bytes() -> int | None:
+    try:
+        return int(os.sysconf("SC_PAGE_SIZE")) * int(os.sysconf("SC_PHYS_PAGES"))
+    except (AttributeError, OSError, ValueError):
+        pass
+    try:
+        completed = subprocess.run(["sysctl", "-n", "hw.memsize"], text=True, capture_output=True, check=False, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if completed.returncode != 0:
+        return None
+    try:
+        return int(completed.stdout.strip())
+    except ValueError:
+        return None
+
+
+def gib(value: int) -> float:
+    return value / float(1024**3)
+
+
 def clean_generated_text(output: str) -> str:
     cleaned = output.strip()
     while cleaned.endswith("[end of text]"):
@@ -1159,11 +1182,29 @@ def summarize_results(results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def require_runtime(model: ModelTarget, llama_cpp: Path, runtime: str) -> None:
+def enforce_local_memory_gate(model: ModelTarget, allow_oversized_local_model: bool) -> None:
+    if allow_oversized_local_model or not model.path.exists():
+        return
+    memory_bytes = physical_memory_bytes()
+    if memory_bytes is None:
+        return
+    model_bytes = model.path.stat().st_size
+    threshold = int(memory_bytes * OVERSIZED_LOCAL_MODEL_RAM_FRACTION)
+    if model_bytes > threshold:
+        raise MemoryError(
+            f"refusing to load {model.key} locally: model file is {gib(model_bytes):.1f} GiB, "
+            f"physical memory is {gib(memory_bytes):.1f} GiB, safety threshold is "
+            f"{OVERSIZED_LOCAL_MODEL_RAM_FRACTION:.0%} of RAM. Use remote BF16 sidecar or pass "
+            "--allow-oversized-local-model to override."
+        )
+
+
+def require_runtime(model: ModelTarget, llama_cpp: Path, runtime: str, allow_oversized_local_model: bool) -> None:
     if model.key == "bf16":
         raise ValueError("BF16 benchmark execution is intentionally not supported locally by this GGUF runner")
     if not model.path.exists():
         raise FileNotFoundError(f"missing model file: {model.path}")
+    enforce_local_memory_gate(model, allow_oversized_local_model)
     binary = server_binary(llama_cpp) if runtime == "server" else generation_binary(llama_cpp)
     if not binary.exists():
         raise FileNotFoundError(f"missing llama.cpp binary: {binary}")
@@ -1188,8 +1229,9 @@ def run_model_benchmarks(
     server_host: str,
     server_port: int | None,
     server_start_timeout: int,
+    allow_oversized_local_model: bool,
 ) -> dict[str, Any]:
-    require_runtime(model, llama_cpp, runtime)
+    require_runtime(model, llama_cpp, runtime, allow_oversized_local_model)
     benchmark_payloads = []
     payload = {
         "schema": SCHEMA,
@@ -1208,6 +1250,7 @@ def run_model_benchmarks(
             "server_host": server_host if runtime == "server" else None,
             "server_port": server_port if runtime == "server" else None,
             "server_start_timeout_seconds": server_start_timeout if runtime == "server" else None,
+            "allow_oversized_local_model": allow_oversized_local_model,
         },
         "benchmarks": benchmark_payloads,
     }
@@ -1302,6 +1345,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--server-host", default="127.0.0.1")
     parser.add_argument("--server-port", type=int)
     parser.add_argument("--server-start-timeout", type=int, default=900)
+    parser.add_argument(
+        "--allow-oversized-local-model",
+        action="store_true",
+        help="Override the RAM safety gate for local GGUF files larger than the configured RAM threshold.",
+    )
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-judge", action="store_true")
@@ -1358,6 +1406,7 @@ def main() -> int:
                 server_host=args.server_host,
                 server_port=args.server_port,
                 server_start_timeout=args.server_start_timeout,
+                allow_oversized_local_model=args.allow_oversized_local_model,
             )
     return 0
 

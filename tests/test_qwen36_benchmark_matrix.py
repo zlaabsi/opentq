@@ -21,6 +21,7 @@ from scripts.run_qwen36_benchmark_subsets import (
     format_qwen_prompt,
     generation_binary,
     generation_command,
+    enforce_local_memory_gate,
     llama_server_command,
     ModelTarget,
     parse_json_list,
@@ -215,6 +216,22 @@ def test_benchmark_runner_supports_local_bf16_gguf_reference() -> None:
     assert [target.key for target in targets] == ["bf16_gguf", "q3"]
     assert targets[0].as_payload()["kind"] == "gguf_reference"
     assert MODEL_PATHS["bf16_gguf"].name == "Qwen3.6-27B-BF16.gguf"
+
+
+def test_local_memory_gate_refuses_bf16_file_larger_than_ram_threshold(tmp_path: Path, monkeypatch) -> None:
+    model_path = tmp_path / "bf16.gguf"
+    with model_path.open("wb") as handle:
+        handle.truncate(50 * 1024**3)
+    monkeypatch.setattr(runner, "physical_memory_bytes", lambda: 32 * 1024**3)
+
+    try:
+        enforce_local_memory_gate(ModelTarget("bf16_gguf", model_path), allow_oversized_local_model=False)
+    except MemoryError as exc:
+        assert "refusing to load bf16_gguf locally" in str(exc)
+    else:
+        raise AssertionError("expected oversized local model to be refused")
+
+    enforce_local_memory_gate(ModelTarget("bf16_gguf", model_path), allow_oversized_local_model=True)
 
 
 def test_build_sample_from_mmlu_row_pins_task_metadata() -> None:
