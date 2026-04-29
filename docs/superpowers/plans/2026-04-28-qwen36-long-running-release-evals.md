@@ -26,6 +26,8 @@
 - The canonical HF GGUF repo was refreshed and verified remotely. The README contains hardware compatibility and practical mini-subset totals: `Q3_K_M` `39/68`, `Q4_K_M` `39/68`.
 - Local BF16 sidecar remains intentionally skipped on M1 Max 32 GB; use official Qwen baseline unless paid/remote BF16 execution is explicitly approved.
 - `Q5_K_M` was generated locally and passed smoke, quality `5/5`, release extended `10/10`, M1 Max 32 GB bounded generation, and 8K `llama-bench` gates. After direct upload instruction, the canonical HF repo was refreshed with Q5 and verified at remote SHA `ff2df91ff002d059a8f6c567d257a23566eac9ae`.
+- SWE-bench Verified and LiveCodeBench v6 are now represented in `scripts/run_qwen36_benchmark_subsets.py` with pinned metadata. SWE-bench remains external-harness-only; LiveCodeBench lite v6 uses the pinned raw `test6.jsonl` file and stdin exact scoring over decoded public/private tests.
+- Packed and Metal repos were re-staged locally. Their manifests still mark them `public_release_ready=false`, so they remain intentionally unpublished.
 
 ---
 
@@ -86,8 +88,8 @@ All benchmark families requested by the user are explicitly classified in `bench
 | AIME | AIME26-compatible subset only for official delta against `94.1`; otherwise AIME-style OTQ subset |
 | HumanEval | OTQ code subset now; BF16 mini-run required for degradation claim |
 | MBPP | OTQ code subset now; BF16 mini-run required for degradation claim |
-| SWE-bench | 3-task verified subset max locally; official delta only with real SWE-bench harness/split |
-| LiveCodeBench | v6-compatible subset only for official delta against `83.9` |
+| SWE-bench | Pinned Verified adapter; patch generation only locally, pass/fail requires official SWE-bench harness |
+| LiveCodeBench | Pinned lite v6 adapter with stdin exact scorer; official delta against `83.9` only after protocol review |
 | BIG-Bench Hard (BBH) | OTQ subset now; BF16 mini-run required for degradation claim |
 | GPQA | GPQA Diamond-compatible subset only for official delta against `87.8` |
 | MT-Bench | Judge-based OTQ sentinel; no degradation claim without pinned judge and BF16 sidecar |
@@ -113,7 +115,7 @@ All benchmark families requested by the user are explicitly classified in `bench
 - `scripts/stage_qwen36_otq_gguf_repo.py`: existing canonical GGUF staging script.
 - `scripts/stage_qwen36_otq_runtime_repos.py`: existing Packed and Metal staging script.
 - `scripts/build_qwen36_cleanup_manifest.py`: existing deletion candidate manifest builder.
-- `scripts/run_qwen36_benchmark_subsets.py`: create in Phase 3; plans benchmark matrix subsets in `--dry-run` mode and refuses score JSON output until Phase 4 adapters exist.
+- `scripts/run_qwen36_benchmark_subsets.py`: plans benchmark matrix subsets, runs pinned text/code adapters, gates external-harness rows, and refuses unsupported degradation claims.
 - `scripts/build_qwen36_degradation_report.py`: create in Phase 5; merges official baselines, OTQ subset runs, optional BF16 mini-runs, and reporting disclaimers.
 - `artifacts/qwen3.6-27b-benchmark-subsets/`: generated benchmark subset evidence.
 - `artifacts/qwen3.6-27b-degradation-report/`: generated degradation summary for local review and Hugging Face card input.

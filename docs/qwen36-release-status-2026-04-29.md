@@ -4,6 +4,9 @@
 
 - Pushed `main` through the current release work.
 - Implemented pinned benchmark adapters for the text-only Phase 4 set.
+- Added the remaining agentic/coding adapters:
+  - SWE-bench Verified pinned to `princeton-nlp/SWE-bench_Verified` at `c104f840cc67f8b6eec6f759ebc8b2693d585d4a`, status `requires_external_harness`, no synthetic pass/fail;
+  - LiveCodeBench lite v6 pinned to `livecodebench/code_generation_lite` at `0fe84c3912ea0c4d4a78037083943e8f0c4dd505`, raw `test6.jsonl`, stdin exact scoring over public and private tests.
 - Ran practical Q3/Q4 mini-subsets: `Q3_K_M` `39/68`, `Q4_K_M` `39/68`.
 - Generated the practical degradation report under `artifacts/qwen3.6-27b-degradation-report-practical/`.
 - Refreshed `zlaabsi/Qwen3.6-27B-OTQ-GGUF` with:
@@ -22,6 +25,7 @@
 - Regenerated local canonical staging at `artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF` with `Q3_K_M`, `Q4_K_M`, and `Q5_K_M`.
 - Uploaded the refreshed canonical staging to `zlaabsi/Qwen3.6-27B-OTQ-GGUF`; remote SHA after verification: `ff2df91ff002d059a8f6c567d257a23566eac9ae`.
 - Verified the remote now contains `Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf`, `evidence/Q5_K_M/validation.json`, `evidence/Q5_K_M/quality-eval.json`, and `evidence/Q5_K_M/release-eval.json`.
+- Re-staged Packed and Metal runtime repos locally. Packed remains `public_release_ready=false`; Metal has TQ3_SB4 validation evidence but remains `public_release_ready=false` pending runtime loader/kernel readiness.
 
 ## Cleanup Decision
 
@@ -44,7 +48,8 @@ The decision is documented in `docs/qwen36-disk-cleanup-arbitrage.md`.
 ## Still Gated
 
 - Q5 HF publication: complete and verified on `zlaabsi/Qwen3.6-27B-OTQ-GGUF`.
-- SWE-bench and LiveCodeBench: require real harness adapters.
+- SWE-bench: adapter is pinned, but public pass/fail still requires the official external SWE-bench harness.
+- LiveCodeBench: adapter is pinned for v6 stdin tasks; official-delta publication still requires review that the selected subset matches the model-card v6 protocol.
 - MT-Bench, Chatbot Arena style, AlpacaEval: require a pinned judge setup.
 - MMMU and MathVista: blocked for the current text-only GGUF track.
 - Packed: not public-release-ready until runtime/tooling is public and validated.

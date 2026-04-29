@@ -13,6 +13,8 @@ This is the operational checklist for the Qwen3.6-27B release/evaluation run. Th
 - Packed and Metal tracks are separate from stock llama.cpp GGUF and must stay gated until public runtime evidence exists.
 - Disk cleanup deleted only regenerable Hugging Face caches. Local BF16 GGUF source and release artifacts were preserved.
 - The canonical HF GGUF repo has been refreshed with hardware compatibility and practical mini-subset scores; local staging now includes Q5 evidence.
+- SWE-bench Verified is now pinned as an external-harness adapter; this runner records prompts/patch outputs but refuses synthetic pass/fail.
+- LiveCodeBench lite v6 is now pinned to `test6.jsonl` and has a local stdin exact-match scorer for public and private tests.
 
 ## Autonomous Rules
 
@@ -33,14 +35,15 @@ This is the operational checklist for the Qwen3.6-27B release/evaluation run. Th
 - [x] Phase 5a: Add degradation report builder with no-fake-delta gates.
 - [x] Phase 5b: Produce final degradation report after Q3/Q4 subset JSONs exist.
 - [x] Phase 6: Generate, validate, stage, and publish Q5_K_M after direct upload instruction.
-- [ ] Phase 7: Re-stage and gate `Qwen3.6-27B-OTQ-Packed`; upload only with `HF_UPLOAD=1` and runtime evidence.
-- [ ] Phase 8: Re-stage and gate `Qwen3.6-27B-OTQ-Metal-GGUF`; upload only with `HF_UPLOAD=1` and runtime evidence.
+- [x] Phase 7: Re-stage and gate `Qwen3.6-27B-OTQ-Packed`; keep release blocked until public runtime evidence exists.
+- [x] Phase 8: Re-stage and gate `Qwen3.6-27B-OTQ-Metal-GGUF`; keep release blocked until loader/kernel runtime evidence exists.
 - [x] Phase 9: Build cleanup manifest and delete only approved regenerable cache paths.
 - [x] Phase 10: Write final release report with git hash, HF inventory, runtime evidence, benchmark subset summary, and cleanup decisions.
 
 ## Benchmark Groups
 
 - Official-comparable if scoring matches: MMLU-Pro, AIME26, SWE-bench Verified/Pro/Multilingual, LiveCodeBench v6, GPQA Diamond.
+- Implemented but still gated: SWE-bench Verified requires the external official harness; LiveCodeBench v6 uses pinned `livecodebench/code_generation_lite` `v6` stdin exact scoring.
 - OTQ subset plus BF16 mini-run required for degradation: MMLU, ARC, HellaSwag, GSM8K, MATH, HumanEval, MBPP, BBH, IFEval, TruthfulQA, WinoGrande, DROP, PIQA, CommonsenseQA.
 - Judge-based sentinel only unless a BF16 sidecar and pinned judge exist: MT-Bench, Chatbot Arena style, AlpacaEval.
 - Blocked for current text-only release: MMMU, MathVista.

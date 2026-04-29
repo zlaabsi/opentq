@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
 import json
+import pickle
 import subprocess
+import zlib
 from pathlib import Path
 
 import requests
@@ -11,9 +14,12 @@ from scripts.run_qwen36_benchmark_subsets import (
     build_sample_from_row,
     apply_max_tokens,
     fetch_dataset_viewer_row,
+    fetch_hf_raw_jsonl_row,
     generation_binary,
     generation_command,
     ModelTarget,
+    parse_json_list,
+    run_livecodebench_stdin_tests,
     score_benchmark_output,
 )
 
@@ -58,6 +64,8 @@ PHASE4_ADAPTER_IDS = {
     "aime",
     "humaneval",
     "mbpp",
+    "swe_bench",
+    "livecodebench",
     "bbh",
     "gpqa",
     "ifeval",
@@ -133,6 +141,8 @@ def test_benchmark_subset_runner_dry_run_reports_skips(tmp_path: Path) -> None:
     assert completed.returncode == 0, completed.stderr
     assert "mmlu_pro" in completed.stdout
     assert "planned mmlu_pro mode=official_comparable samples=24" in completed.stdout
+    assert "requires_external_harness swe_bench mode=official_comparable samples=0" in completed.stdout
+    assert "planned livecodebench mode=official_comparable samples=12" in completed.stdout
     assert "planned ifeval mode=mini_bf16_required samples=24" in completed.stdout
     assert "skipped_judge" in completed.stdout
     assert "blocked_modality" in completed.stdout
@@ -197,6 +207,65 @@ def test_build_sample_from_mmlu_row_pins_task_metadata() -> None:
     assert "(B) 4" in sample["prompt"]
 
 
+def test_build_sample_from_swe_bench_row_records_harness_requirement() -> None:
+    sample = build_sample_from_row(
+        ADAPTERS["swe_bench"],
+        "offset:0",
+        {
+            "repo": "astropy/astropy",
+            "instance_id": "astropy__astropy-12907",
+            "base_commit": "d16bfe05a744909de4b27f5875fe0d4ed41ce607",
+            "problem_statement": "Nested compound models are not separable.",
+            "hints_text": "",
+            "FAIL_TO_PASS": "[\"test_a\"]",
+            "PASS_TO_PASS": "[\"test_b\"]",
+        },
+    )
+
+    assert sample["benchmark_id"] == "swe_bench"
+    assert sample["dataset"] == "princeton-nlp/SWE-bench_Verified"
+    assert sample["harness_required"] is True
+    assert sample["scoring_rule"] == "swe_bench_verified_harness"
+    assert "Return only a unified diff patch" in sample["prompt"]
+
+
+def test_build_sample_from_livecodebench_row_records_v6_stdin_tests() -> None:
+    sample = build_sample_from_row(
+        ADAPTERS["livecodebench"],
+        "offset:0",
+        {
+            "question_title": "A+B",
+            "question_content": "Read two integers and print their sum.",
+            "platform": "atcoder",
+            "question_id": "abc000_a",
+            "contest_id": "abc000",
+            "contest_date": "2025-01-01T00:00:00",
+            "starter_code": "",
+            "difficulty": "easy",
+            "public_test_cases": '[{"input": "1 2\\n", "output": "3\\n", "testtype": "stdin"}]',
+            "private_test_cases": '[{"input": "4 5\\n", "output": "9\\n", "testtype": "stdin"}]',
+            "metadata": "{}",
+        },
+    )
+
+    assert sample["benchmark_id"] == "livecodebench"
+    assert sample["dataset"] == "livecodebench/code_generation_lite"
+    assert sample["config"] == "v6"
+    assert sample["source_question_id"] == "abc000_a"
+    assert len(sample["public_test_cases"]) == 1
+    assert len(sample["private_test_cases"]) == 1
+    assert sample["scoring_rule"] == "livecodebench_v6_stdin_exact"
+
+
+def test_livecodebench_private_tests_can_use_official_compressed_encoding() -> None:
+    payload = json.dumps([{"input": "1\n", "output": "1\n", "testtype": "stdin"}])
+    compressed = base64.b64encode(zlib.compress(pickle.dumps(payload))).decode("utf-8")
+
+    parsed = parse_json_list(compressed)
+
+    assert parsed == [{"input": "1\n", "output": "1\n", "testtype": "stdin"}]
+
+
 def test_score_benchmark_output_handles_multiple_choice_and_numeric_answers() -> None:
     mc = {
         "scoring_rule": "multiple_choice_letter",
@@ -210,6 +279,26 @@ def test_score_benchmark_output_handles_multiple_choice_and_numeric_answers() ->
     assert score_benchmark_output(mc, "The answer is D.")["passed"] is True
     assert score_benchmark_output(mc, "The answer is A.")["passed"] is False
     assert score_benchmark_output(numeric, "Final answer: 18")["passed"] is True
+
+
+def test_swe_bench_scoring_refuses_synthetic_pass_fail() -> None:
+    score = score_benchmark_output({"scoring_rule": "swe_bench_verified_harness", "answer": None}, "diff --git a/x b/x")
+
+    assert score["passed"] is None
+    assert score["reason"] == "requires_external_swe_bench_verified_harness"
+
+
+def test_livecodebench_stdin_scorer_executes_generated_python() -> None:
+    sample = {
+        "public_test_cases": [{"input": "1 2\n", "output": "3\n", "testtype": "stdin"}],
+        "private_test_cases": [{"input": "4 5\n", "output": "9\n", "testtype": "stdin"}],
+    }
+    output = "```python\nimport sys\nnums=list(map(int, sys.stdin.read().split()))\nprint(sum(nums))\n```"
+
+    score = run_livecodebench_stdin_tests(output, sample)
+
+    assert score["passed"] is True
+    assert score["total_cases"] == 2
 
 
 def test_generation_command_prefers_llama_completion(tmp_path: Path) -> None:
@@ -278,3 +367,28 @@ def test_fetch_dataset_viewer_row_retries_transient_errors(monkeypatch) -> None:
 
     assert row["question"] == "q"
     assert len(calls) == 2
+
+
+def test_fetch_hf_raw_jsonl_row_reads_pinned_livecodebench_file(monkeypatch) -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def iter_lines(self, decode_unicode: bool = False):
+            assert decode_unicode is True
+            yield '{"question_id": "first"}'
+            yield '{"question_id": "second"}'
+
+    calls = []
+
+    def fake_get(url, *args, **kwargs):
+        calls.append((url, kwargs))
+        return FakeResponse()
+
+    monkeypatch.setattr(runner.requests, "get", fake_get)
+
+    row = fetch_hf_raw_jsonl_row(ADAPTERS["livecodebench"], "offset:1")
+
+    assert row["question_id"] == "second"
+    assert "livecodebench/code_generation_lite/resolve/0fe84c3912ea0c4d4a78037083943e8f0c4dd505/test6.jsonl" in calls[0][0]
+    assert calls[0][1]["stream"] is True

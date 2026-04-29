@@ -2,24 +2,30 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import pickle
 import subprocess
 import tempfile
 import re
 import time
+import zlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
 
 SCHEMA = "opentq.qwen36_benchmark_subset_eval.v1"
 DATASET_VIEWER = "https://datasets-server.huggingface.co"
+HF_DATASETS_RESOLVE = "https://huggingface.co/datasets"
 DATASET_VIEWER_RETRIES = 5
 DATASET_VIEWER_RETRY_STATUSES = {429, 500, 502, 503, 504}
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+EXTERNAL_HARNESS_SCORING_RULES = {"swe_bench_verified_harness"}
 
 MODEL_PATHS = {
     "q3": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf"),
@@ -174,6 +180,29 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         scoring_rule="python_unit_tests",
         max_tokens=2048,
     ),
+    "swe_bench": BenchmarkAdapter(
+        "swe_bench",
+        dataset="princeton-nlp/SWE-bench_Verified",
+        config="default",
+        split="test",
+        revision="c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
+        task_ids=_offsets(3),
+        prompt_format="qwen3-no-think",
+        scoring_rule="swe_bench_verified_harness",
+        max_tokens=8192,
+    ),
+    "livecodebench": BenchmarkAdapter(
+        "livecodebench",
+        dataset="livecodebench/code_generation_lite",
+        config="v6",
+        split="test",
+        revision="0fe84c3912ea0c4d4a78037083943e8f0c4dd505",
+        task_ids=_offsets(12),
+        prompt_format="qwen3-no-think",
+        scoring_rule="livecodebench_v6_stdin_exact",
+        max_tokens=4096,
+        backend="hf_raw_jsonl",
+    ),
     "bbh": BenchmarkAdapter(
         "bbh",
         dataset="lukaemon/bbh",
@@ -320,6 +349,26 @@ def extract_boxed_answer(text: str) -> str:
     return match.group(1).strip() if match else text.strip()
 
 
+def parse_json_list(value: Any) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if isinstance(value, list):
+        return [dict(item) for item in value]
+    raw = str(value)
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        # LiveCodeBench lite stores private tests as base64(zlib(pickle(JSON))).
+        # The dataset revision is pinned in ADAPTERS before this path is used.
+        unpacked = pickle.loads(zlib.decompress(base64.b64decode(raw.encode("utf-8"))))
+        if isinstance(unpacked, bytes):
+            unpacked = unpacked.decode("utf-8")
+        parsed = json.loads(unpacked) if isinstance(unpacked, str) else unpacked
+    if not isinstance(parsed, list):
+        raise ValueError(f"expected JSON list, got {type(parsed).__name__}")
+    return [dict(item) for item in parsed]
+
+
 def build_sample_from_row(adapter: BenchmarkAdapter, task_id: str, row: dict[str, Any]) -> dict[str, Any]:
     sample = {
         "benchmark_id": adapter.benchmark_id,
@@ -373,6 +422,52 @@ def build_sample_from_row(adapter: BenchmarkAdapter, task_id: str, row: dict[str
             answer=None,
             python_tests="\n".join(str(item) for item in row["test_list"]),
             source_task_id=row.get("task_id"),
+        )
+    elif benchmark_id == "swe_bench":
+        hints = str(row.get("hints_text") or "").strip()
+        hints_block = f"\n\nHints:\n{hints}" if hints else ""
+        sample.update(
+            prompt=(
+                "You are fixing a real GitHub issue from SWE-bench Verified.\n"
+                "Return only a unified diff patch that applies to the repository at the base commit.\n\n"
+                f"Repository: {row['repo']}\n"
+                f"Base commit: {row['base_commit']}\n"
+                f"Instance id: {row['instance_id']}\n\n"
+                f"Issue:\n{row['problem_statement']}{hints_block}"
+            ),
+            answer=None,
+            source_instance_id=row.get("instance_id"),
+            repo=row.get("repo"),
+            base_commit=row.get("base_commit"),
+            fail_to_pass=row.get("FAIL_TO_PASS"),
+            pass_to_pass=row.get("PASS_TO_PASS"),
+            harness_required=True,
+            scoring_note="SWE-bench Verified requires the official repository checkout and test harness; no pass/fail is computed by this GGUF runner.",
+        )
+    elif benchmark_id == "livecodebench":
+        public_tests = parse_json_list(row.get("public_test_cases"))
+        private_tests = parse_json_list(row.get("private_test_cases"))
+        starter_code = str(row.get("starter_code") or "").strip()
+        starter_block = f"\n\nStarter code:\n```python\n{starter_code}\n```" if starter_code else ""
+        sample.update(
+            prompt=(
+                "Write a Python 3 solution for this programming contest problem. "
+                "Read from stdin and write to stdout. Return only executable Python code, no Markdown.\n\n"
+                f"Title: {row['question_title']}\n"
+                f"Platform: {row['platform']}\n"
+                f"Question id: {row['question_id']}\n"
+                f"Contest date: {row['contest_date']}\n"
+                f"Difficulty: {row['difficulty']}\n\n"
+                f"{row['question_content']}{starter_block}"
+            ),
+            answer=None,
+            source_question_id=row.get("question_id"),
+            contest_date=row.get("contest_date"),
+            platform=row.get("platform"),
+            difficulty=row.get("difficulty"),
+            public_test_cases=public_tests,
+            private_test_cases=private_tests,
+            scoring_note="LiveCodeBench lite v6 stdin exact-match scorer using the pinned test6.jsonl public and private test cases.",
         )
     elif benchmark_id == "bbh":
         sample.update(prompt=f"{row['input']}\n\nReturn only the answer.", answer=str(row["target"]))
@@ -437,11 +532,34 @@ def fetch_datasets_library_row(adapter: BenchmarkAdapter, task_id: str) -> dict[
     except ImportError as exc:
         raise RuntimeError("datasets package is required for this adapter") from exc
     offset = parse_task_offset(task_id)
-    dataset = load_dataset(adapter.dataset, split=adapter.split, revision=adapter.revision)
+    dataset = load_dataset(adapter.dataset, adapter.config, split=adapter.split, revision=adapter.revision)
     return dict(dataset[offset])
 
 
+def raw_jsonl_filename(adapter: BenchmarkAdapter) -> str:
+    if adapter.dataset == "livecodebench/code_generation_lite" and adapter.config == "v6":
+        return "test6.jsonl"
+    raise ValueError(f"unsupported raw JSONL adapter: {adapter.benchmark_id}")
+
+
+def fetch_hf_raw_jsonl_row(adapter: BenchmarkAdapter, task_id: str) -> dict[str, Any]:
+    offset = parse_task_offset(task_id)
+    dataset = quote(adapter.dataset, safe="/")
+    filename = quote(raw_jsonl_filename(adapter), safe="/")
+    url = f"{HF_DATASETS_RESOLVE}/{dataset}/resolve/{adapter.revision}/{filename}"
+    response = requests.get(url, stream=True, timeout=120)
+    response.raise_for_status()
+    for index, line in enumerate(response.iter_lines(decode_unicode=True)):
+        if index == offset:
+            if not line:
+                raise ValueError(f"empty JSONL row for {adapter.benchmark_id} {task_id}")
+            return dict(json.loads(line))
+    raise ValueError(f"no row returned for {adapter.benchmark_id} {task_id}")
+
+
 def fetch_row(adapter: BenchmarkAdapter, task_id: str) -> dict[str, Any]:
+    if adapter.backend == "hf_raw_jsonl":
+        return fetch_hf_raw_jsonl_row(adapter, task_id)
     if adapter.backend == "datasets_library":
         return fetch_datasets_library_row(adapter, task_id)
     return fetch_dataset_viewer_row(adapter, task_id)
@@ -469,6 +587,14 @@ def clean_generated_text(output: str) -> str:
     return cleaned
 
 
+def extract_python_code(output: str) -> str:
+    cleaned = clean_generated_text(output)
+    fenced = re.search(r"```(?:python|py)?\s*(.*?)```", cleaned, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        return fenced.group(1).strip()
+    return cleaned
+
+
 def extract_multiple_choice_letter(output: str) -> str | None:
     cleaned = clean_generated_text(output).upper()
     boxed = re.search(r"\\BOXED\{([A-Z])\}", cleaned)
@@ -489,13 +615,63 @@ def extract_number(output: str) -> str | None:
 def run_python_unit_tests(code: str, tests: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "candidate_test.py"
-        path.write_text(f"{code}\n\n{tests}\n", encoding="utf-8")
+        path.write_text(f"{extract_python_code(code)}\n\n{tests}\n", encoding="utf-8")
         completed = subprocess.run(["python", str(path)], text=True, capture_output=True, check=False, timeout=20)
     return {
         "passed": completed.returncode == 0,
         "returncode": completed.returncode,
         "stdout_tail": completed.stdout[-2000:],
         "stderr_tail": completed.stderr[-2000:],
+    }
+
+
+def normalize_stdio(text: str) -> str:
+    return "\n".join(line.rstrip() for line in text.strip().splitlines())
+
+
+def run_livecodebench_stdin_tests(code: str, sample: dict[str, Any]) -> dict[str, Any]:
+    cases = [*sample.get("public_test_cases", []), *sample.get("private_test_cases", [])]
+    if not cases:
+        return {"passed": None, "reason": "no_test_cases"}
+    unsupported = [case.get("testtype") for case in cases if case.get("testtype") != "stdin"]
+    if unsupported:
+        return {
+            "passed": None,
+            "reason": "unsupported_livecodebench_testtype",
+            "unsupported_testtypes": sorted({str(item) for item in unsupported}),
+        }
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "solution.py"
+        path.write_text(extract_python_code(code) + "\n", encoding="utf-8")
+        failures = []
+        for index, case in enumerate(cases):
+            completed = subprocess.run(
+                ["python", str(path)],
+                input=str(case.get("input", "")),
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=10,
+            )
+            expected = normalize_stdio(str(case.get("output", "")))
+            actual = normalize_stdio(completed.stdout)
+            if completed.returncode != 0 or actual != expected:
+                failures.append(
+                    {
+                        "case_index": index,
+                        "returncode": completed.returncode,
+                        "expected_tail": expected[-500:],
+                        "actual_tail": actual[-500:],
+                        "stderr_tail": completed.stderr[-500:],
+                    }
+                )
+                if len(failures) >= 3:
+                    break
+    return {
+        "passed": not failures,
+        "total_cases": len(cases),
+        "checked_cases": len(cases) if not failures else failures[-1]["case_index"] + 1,
+        "failures": failures,
     }
 
 
@@ -547,6 +723,14 @@ def score_benchmark_output(sample: dict[str, Any], output: str) -> dict[str, Any
         return run_python_unit_tests(clean_generated_text(output), str(sample["python_tests"]))
     if scoring_rule == "ifeval_partial":
         return score_ifeval_partial(sample, output)
+    if scoring_rule == "swe_bench_verified_harness":
+        return {
+            "passed": None,
+            "reason": "requires_external_swe_bench_verified_harness",
+            "scoring_note": "Patch generation can be captured, but pass/fail must come from the official SWE-bench harness.",
+        }
+    if scoring_rule == "livecodebench_v6_stdin_exact":
+        return run_livecodebench_stdin_tests(output, sample)
     raise ValueError(f"unsupported scoring rule: {scoring_rule}")
 
 
@@ -568,14 +752,21 @@ def sample_count(row: dict[str, Any], defaults: dict[str, Any], sample_mode: str
     return int(defaults.get("quick_samples_per_family", 16))
 
 
-def row_status(row: dict[str, Any], allow_judge: bool) -> str:
+def adapter_requires_external_harness(adapter: BenchmarkAdapter | None) -> bool:
+    return bool(adapter and adapter.scoring_rule in EXTERNAL_HARNESS_SCORING_RULES)
+
+
+def row_status(row: dict[str, Any], allow_judge: bool, allow_external_harness: bool = False) -> str:
     mode = str(row.get("comparison_mode", ""))
     if mode == "blocked_modality":
         return "blocked_modality"
     if mode == "judge_based" and not allow_judge:
         return "skipped_judge"
-    if str(row.get("id")) not in ADAPTERS:
+    adapter = ADAPTERS.get(str(row.get("id")))
+    if adapter is None:
         return "missing_adapter"
+    if adapter_requires_external_harness(adapter) and not allow_external_harness:
+        return "requires_external_harness"
     return "planned"
 
 
@@ -587,11 +778,12 @@ def build_plan(
     sample_mode: str,
     dry_run: bool,
     allow_judge: bool,
+    allow_external_harness: bool,
 ) -> dict[str, Any]:
     defaults = dict(matrix.get("default_subset_policy", {}))
     benchmarks = []
     for row in matrix.get("benchmarks", []):
-        status = row_status(row, allow_judge)
+        status = row_status(row, allow_judge, allow_external_harness)
         adapter = ADAPTERS.get(str(row["id"]))
         benchmarks.append(
             {
@@ -600,7 +792,9 @@ def build_plan(
                 "family": row["family"],
                 "comparison_mode": row["comparison_mode"],
                 "status": status,
-                "sample_count": 0 if status in {"blocked_modality", "skipped_judge"} else sample_count(row, defaults, sample_mode),
+                "sample_count": 0
+                if status in {"blocked_modality", "skipped_judge", "requires_external_harness"}
+                else sample_count(row, defaults, sample_mode),
                 "official_baseline": row.get("official_baseline"),
                 "subset_policy": row["subset_policy"],
                 "claim_rule": row["claim_rule"],
@@ -637,13 +831,18 @@ def print_plan(plan: dict[str, Any]) -> None:
             )
 
 
-def selected_adapters(matrix: dict[str, Any], allow_judge: bool, benchmark_ids: set[str] | None) -> list[BenchmarkAdapter]:
+def selected_adapters(
+    matrix: dict[str, Any],
+    allow_judge: bool,
+    allow_external_harness: bool,
+    benchmark_ids: set[str] | None,
+) -> list[BenchmarkAdapter]:
     adapters = []
     for row in matrix.get("benchmarks", []):
         benchmark_id = str(row["id"])
         if benchmark_ids is not None and benchmark_id not in benchmark_ids:
             continue
-        if row_status(row, allow_judge) != "planned":
+        if row_status(row, allow_judge, allow_external_harness) != "planned":
             continue
         adapter = ADAPTERS.get(benchmark_id)
         if adapter is not None:
@@ -781,6 +980,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-judge", action="store_true")
+    parser.add_argument(
+        "--allow-external-harness",
+        action="store_true",
+        help="Include adapters that require an external official harness; this runner still records no synthetic pass/fail.",
+    )
     return parser.parse_args()
 
 
@@ -796,11 +1000,17 @@ def main() -> int:
         sample_mode=args.sample_mode,
         dry_run=args.dry_run,
         allow_judge=args.allow_judge,
+        allow_external_harness=args.allow_external_harness,
     )
     print_plan(plan)
     if not args.dry_run:
         benchmark_ids = set(args.benchmark_id) if args.benchmark_id else None
-        adapters = selected_adapters(matrix, allow_judge=args.allow_judge, benchmark_ids=benchmark_ids)
+        adapters = selected_adapters(
+            matrix,
+            allow_judge=args.allow_judge,
+            allow_external_harness=args.allow_external_harness,
+            benchmark_ids=benchmark_ids,
+        )
         if not adapters:
             raise ValueError("no executable benchmark adapters selected")
         for model in models:
