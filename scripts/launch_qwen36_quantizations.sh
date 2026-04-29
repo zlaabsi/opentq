@@ -7,8 +7,8 @@ cd "$ROOT_DIR"
 OUTPUT_ROOT="${1:-artifacts/qwen3.6-27b}"
 mkdir -p "$OUTPUT_ROOT"
 
-RUN_LOG="$OUTPUT_ROOT/overnight.log"
-PID_FILE="$OUTPUT_ROOT/overnight.pid"
+RUN_LOG="$OUTPUT_ROOT/quantization.log"
+PID_FILE="$OUTPUT_ROOT/quantization.pid"
 CAFFEINATE_PID_FILE="$OUTPUT_ROOT/caffeinate.pid"
 
 nohup /bin/bash -lc "cd '$ROOT_DIR' && exec ./scripts/run_qwen36_quantizations.sh '$OUTPUT_ROOT'" >"$RUN_LOG" 2>&1 &

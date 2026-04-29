@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import re
 import subprocess
@@ -144,7 +145,7 @@ def generation_passed(result: dict[str, Any], expected_output_regex: str | None)
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run local Qwen3.6 GGUF runtime checks.")
     parser.add_argument("--model", type=Path, required=True)
-    parser.add_argument("--llama-cpp", type=Path, default=Path("/Users/zlaabsi/Documents/GitHub/llama.cpp"))
+    parser.add_argument("--llama-cpp", type=Path, default=Path(os.environ.get("LLAMA_CPP_DIR", "../llama.cpp")))
     parser.add_argument("--machine", default="M1 Max 32GB")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--prompt", default="Réponds uniquement par la capitale de la France.")

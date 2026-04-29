@@ -7,7 +7,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 MODEL="$1"
-LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
+LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-../llama.cpp}"
 PROMPT_TOKENS="${PROMPT_TOKENS:-8192}"
 GEN_TOKENS="${GEN_TOKENS:-128}"
 NGL="${NGL:-99}"

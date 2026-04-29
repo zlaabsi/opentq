@@ -235,7 +235,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--subset-root", type=Path, required=True)
     parser.add_argument("--baseline-key", default="bf16_gguf")
     parser.add_argument("--candidate-key", action="append")
-    parser.add_argument("--matrix", type=Path, default=Path("benchmarks/qwen36_long_running_benchmark_matrix.json"))
+    parser.add_argument("--matrix", type=Path, default=Path("benchmarks/qwen36_benchmark_matrix.json"))
     parser.add_argument("--output-root", type=Path, required=True)
     return parser.parse_args()
 

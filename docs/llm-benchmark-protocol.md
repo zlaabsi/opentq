@@ -1,68 +1,48 @@
-# Qwen3.6-27B LLM Benchmark Protocol
+# Benchmark Methodology
 
-This protocol separates public release gates from quality claims.
+OpenTQ reports two different kinds of evidence:
 
-## Baseline Policy
+1. **Release gates**: smoke generation, runtime throughput, bounded generation, and artifact integrity checks. These show that a release is runnable.
+2. **Quality signals**: paired benchmark subsets or full benchmark harnesses. These estimate quantization regression relative to a reference model.
 
-Do not rerun the BF16 model locally just to obtain quality baselines. Qwen already publishes the Qwen3.6-27B reference scores in the official model card. Those values are the external BF16/source baseline for public reporting.
+The two should not be conflated. A runnable GGUF release is not automatically a full benchmark claim.
 
-Local BF16 runs are only useful for hardware-specific runtime questions, for example M1 Max prefill wall-clock behavior. They are not required for the model quality release report. For Qwen3.6-27B on M1 Max 32 GB, a local BF16 quality sidecar has low practical value because the full BF16 model is larger than comfortable unified-memory headroom; use the official baseline unless a paid or remote BF16 run is explicitly approved.
+## Paired Mini-Subsets
 
-## What Can Be Claimed Today
+The Qwen3.6-27B GGUF release includes a paired BF16-vs-GGUF mini-subset. It uses:
 
-The public `Qwen3.6-27B-OTQ-GGUF` repo has:
+- identical pinned task IDs;
+- the same prompt format;
+- deterministic decoding;
+- the same local scoring rules;
+- machine-readable raw outputs and summary files.
 
-- smoke generation gates;
-- long-context `llama-bench` prefill/decode throughput;
-- deterministic release micro-suite results;
-- per-category pass-rate plots from the release suite;
-- imported official Qwen baseline scores for context.
-- practical Q3/Q4 mini-subset scores with no fake full-benchmark delta.
+This makes the subset useful for regression detection across quantized artifacts. It is intentionally described as a practical quality signal, not as a replacement for official full-harness scores.
 
-That is enough to publish a usable GGUF release. It is not enough to claim parity on MMLU-Pro, GPQA Diamond, SWE-bench, LiveCodeBench, or any other official benchmark until those benchmark tasks are run on the OTQ artifacts with the matching split, prompt format and scoring rule.
+## Full Benchmark Claims
 
-## OTQ-vs-Official Comparison
+OpenTQ treats full benchmark claims as valid only when the quantized artifact is evaluated with the matching benchmark definition:
 
-The comparison flow is:
-
-1. Import the official Qwen baseline table from `benchmarks/qwen36_official_language_baseline.json`.
-2. Run benchmark subsets on the OTQ GGUF files only.
-3. Compare OTQ scores to the official baseline only when the task name, prompt format, scoring rule, and sample policy match.
-
-Use:
-
-```bash
-./scripts/run_qwen36_otq_eval.sh
-```
-
-It evaluates only the OTQ release artifacts. It does not run the BF16 GGUF.
-
-## Public Benchmark Families To Add
-
-The long-running benchmark matrix lives in `benchmarks/qwen36_long_running_benchmark_matrix.json`.
-
-The requested benchmark families are split into four claim classes:
-
-- `official_comparable`: MMLU-Pro, AIME when AIME26-compatible, SWE-bench when the real split/harness is used, LiveCodeBench when v6-compatible, and GPQA when Diamond-compatible.
-- `mini_bf16_required`: MMLU, ARC, HellaSwag, GSM8K, MATH, HumanEval, MBPP, BIG-Bench Hard, IFEval, TruthfulQA, WinoGrande, DROP, PIQA, and CommonsenseQA.
-- `judge_based`: MT-Bench, Chatbot Arena style, and AlpacaEval. Treat these as OTQ usability sentinels unless a pinned judge and matching BF16 sidecar are recorded.
-- `blocked_modality`: MMMU and MathVista for the current text-only GGUF track.
-
-Run fixed-limit OTQ subsets first. Only add BF16 mini-runs when the cost and hardware are explicit.
-
-For every task, record:
-
-- exact dataset/task name and revision;
-- sample limit or full-run flag;
+- dataset and revision;
+- split and task IDs;
 - prompt format;
-- decoding parameters;
-- llama.cpp commit;
-- hardware and OS;
-- wall-clock time, not just decode tok/s;
-- score delta versus the official Qwen baseline when comparable.
+- scoring rule or judge;
+- sample count or full-run setting;
+- runtime and decoding parameters.
 
-## Reporting Rule
+For leaderboard-style comparisons, the quantized model should be run through the same task definition as the BF16/source model. Official upstream model-card scores remain useful context, but they are not a substitute for running the quantized artifact under the matching harness.
 
-A Hugging Face card can say "release-gated" after smoke, release-suite and wall-clock gates pass.
+## Reported Metadata
 
-It can say "delta versus official Qwen baseline" only after the matching benchmark task has been run on the OTQ artifact.
+Every benchmark report should include:
+
+- model artifact and checksum;
+- benchmark name, dataset revision, split, and task IDs;
+- prompt format and decoding settings;
+- runtime backend and hardware;
+- sample count;
+- aggregate score;
+- per-task raw outputs when redistribution is allowed;
+- whether the result is a paired mini-subset, a release gate, or a full benchmark run.
+
+This keeps public claims auditable and makes it clear which numbers are regression signals and which are benchmark claims.

@@ -37,13 +37,13 @@ init_summary() {
     echo "# Qwen3.6 Representative Local Benchmark Run"
     echo
     echo "- Started: $(timestamp)"
-    echo "- DRI: Codex"
+    echo "- Runner: OpenTQ release tooling"
     echo "- Run root: \`$RUN_ROOT\`"
     echo "- Models: \`$MODELS\`"
     echo "- Samples per benchmark cap: \`$SAMPLES_PER_FAMILY\`"
     echo "- Max tokens cap: \`$MAX_TOKENS\`"
     echo "- Benchmarks: \`$BENCHMARK_IDS\`"
-    echo "- Policy: local evidence only; no upload, no deletion, no BF16 sidecar, no full-benchmark claim."
+    echo "- Scope: local release evidence only; not a full-benchmark claim."
     echo
     echo "## Steps"
   } >"$SUMMARY"

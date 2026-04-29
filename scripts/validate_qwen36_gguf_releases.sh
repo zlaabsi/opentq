@@ -7,7 +7,7 @@ export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 
 GGUF_ROOT="${GGUF_ROOT:-artifacts/qwen3.6-27b-gguf}"
 VALIDATION_ROOT="${VALIDATION_ROOT:-artifacts/qwen3.6-27b-validation}"
-LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
+LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-../llama.cpp}"
 NGL="${NGL:-0}"
 CTX_SIZE="${CTX_SIZE:-256}"
 N_PREDICT="${N_PREDICT:-4}"

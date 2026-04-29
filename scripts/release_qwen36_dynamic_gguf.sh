@@ -6,7 +6,7 @@ cd "$REPO_DIR"
 export PYTHONPATH="$REPO_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 source "$REPO_DIR/scripts/qwen36_dynamic_common.sh"
 
-LLAMA_CPP="${LLAMA_CPP:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
+LLAMA_CPP="${LLAMA_CPP:-${LLAMA_CPP_DIR:-../llama.cpp}}"
 HF_USER="${HF_USER:-zlaabsi}"
 BASE_MODEL="${BASE_MODEL:-Qwen/Qwen3.6-27B}"
 PROFILES="${PROFILES:-${PROFILE:-OTQ-DYN-Q3_K_M}}"

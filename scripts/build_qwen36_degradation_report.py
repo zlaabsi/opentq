@@ -129,7 +129,7 @@ def write_markdown(path: Path, payload: dict[str, Any]) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build Qwen3.6 OTQ benchmark degradation report.")
-    parser.add_argument("--matrix", type=Path, default=Path("benchmarks/qwen36_long_running_benchmark_matrix.json"))
+    parser.add_argument("--matrix", type=Path, default=Path("benchmarks/qwen36_benchmark_matrix.json"))
     parser.add_argument("--official-baseline", type=Path, default=Path("benchmarks/qwen36_official_language_baseline.json"))
     parser.add_argument("--subset-root", type=Path, default=Path("artifacts/qwen3.6-27b-benchmark-subsets"))
     parser.add_argument("--output-root", type=Path, default=Path("artifacts/qwen3.6-27b-degradation-report"))

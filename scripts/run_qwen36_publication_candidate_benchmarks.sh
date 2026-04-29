@@ -41,13 +41,13 @@ init_summary() {
     echo "# Qwen3.6 Publication-Candidate Benchmark Run"
     echo
     echo "- Started: $(timestamp)"
-    echo "- DRI: Codex"
+    echo "- Runner: OpenTQ release tooling"
     echo "- Run root: \`$RUN_ROOT\`"
     echo "- Models: \`$MODELS\`"
     echo "- Samples per benchmark cap: \`$SAMPLES_PER_FAMILY\`"
     echo "- Token policy: adapter-native max tokens, no global cap."
     echo "- Benchmarks: \`$BENCHMARK_IDS\`"
-    echo "- Policy: local publication-candidate evidence only; no upload, no deletion, no BF16 sidecar, no official/full-benchmark claim."
+    echo "- Scope: publication-candidate evidence only; not an official full-benchmark claim."
     echo
     echo "## Steps"
   } >"$SUMMARY"

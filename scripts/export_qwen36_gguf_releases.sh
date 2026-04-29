@@ -7,7 +7,7 @@ export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 
 PACKED_ROOT="${PACKED_ROOT:-artifacts/qwen3.6-27b-packed}"
 GGUF_ROOT="${GGUF_ROOT:-artifacts/qwen3.6-27b-gguf}"
-LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
+LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-../llama.cpp}"
 LOG_ROOT="${LOG_ROOT:-artifacts/logs/gguf}"
 FORCE="${FORCE:-0}"
 

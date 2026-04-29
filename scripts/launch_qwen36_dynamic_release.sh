@@ -7,7 +7,7 @@ LOG_ROOT="${LOG_ROOT:-$ROOT_DIR/artifacts/logs/dynamic-release}"
 mkdir -p "$LOG_ROOT"
 
 if ! command -v screen >/dev/null 2>&1; then
-  echo "screen is required for detached long-running dynamic GGUF releases"
+  echo "screen is required for detached dynamic GGUF releases"
   exit 1
 fi
 

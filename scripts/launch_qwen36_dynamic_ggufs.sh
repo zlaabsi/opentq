@@ -7,7 +7,7 @@ LOG_ROOT="${LOG_ROOT:-$ROOT_DIR/artifacts/logs/dynamic-gguf}"
 mkdir -p "$LOG_ROOT"
 
 if ! command -v screen >/dev/null 2>&1; then
-  echo "screen is required for detached long-running dynamic GGUF runs"
+  echo "screen is required for detached dynamic GGUF runs"
   exit 1
 fi
 

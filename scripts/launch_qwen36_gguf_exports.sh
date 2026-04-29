@@ -7,7 +7,7 @@ LOG_ROOT="${LOG_ROOT:-$ROOT_DIR/artifacts/logs/gguf}"
 mkdir -p "$LOG_ROOT"
 
 if ! command -v screen >/dev/null 2>&1; then
-  echo "screen is required for detached long-running exports"
+  echo "screen is required for detached exports"
   exit 1
 fi
 

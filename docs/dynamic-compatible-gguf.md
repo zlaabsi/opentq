@@ -30,14 +30,14 @@ Each profile also promotes first/last layers and periodic attention anchors. Tha
 ## Generate A Plan
 
 ```bash
-cd /Users/zlaabsi/Documents/GitHub/opentq
+cd opentq
 
 uv run opentq dynamic-gguf-profiles
 
 uv run opentq dynamic-gguf-plan \
   --profile OTQ-DYN-Q4_K_M \
   --output artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF \
-  --llama-cpp /Users/zlaabsi/Documents/GitHub/llama.cpp \
+  --llama-cpp ../llama.cpp \
   --source-gguf artifacts/qwen3.6-27b-source/Qwen3.6-27B-BF16.gguf \
   --target-gguf artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf
 ```
@@ -79,7 +79,7 @@ For the canonical multi-file Hugging Face repo, stage from existing validated ar
 
 ```bash
 uv run python scripts/stage_qwen36_otq_gguf_repo.py \
-  --banner "/Users/zlaabsi/Downloads/ChatGPT Image Apr 28, 2026, 01_45_35 AM.png"
+  --banner docs/assets/qwen36-opentq-hero.png
 ```
 
 This also generates benchmark plots and CSV tables from the evidence JSON.

@@ -1,9 +1,9 @@
 {
-  "schema": "opentq.qwen36_long_running_benchmark_matrix.v1",
+  "schema": "opentq.qwen36_benchmark_matrix.v1",
   "model_id": "Qwen/Qwen3.6-27B",
   "retrieved_at": "2026-04-28",
   "official_source": "https://huggingface.co/Qwen/Qwen3.6-27B",
-  "purpose": "Classify the requested benchmark families for long-running OTQ subset runs and prevent unsupported degradation claims.",
+  "purpose": "Classify benchmark families for OTQ subset runs and prevent unsupported degradation claims.",
   "comparison_rules": {
     "official_comparable": "A delta against the official Qwen score may be reported only when the OTQ run uses the same task family, compatible split, prompt/scoring rule, and sample policy.",
     "mini_bf16_required": "No official Qwen score is available for this exact family in the current model card. Report degradation only after a matching BF16 mini-run is available, or publish OTQ-only pass rate/latency.",

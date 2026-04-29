@@ -34,7 +34,7 @@ from scripts.run_qwen36_benchmark_subsets import (
 )
 
 
-MATRIX = Path("benchmarks/qwen36_long_running_benchmark_matrix.json")
+MATRIX = Path("benchmarks/qwen36_benchmark_matrix.json")
 
 
 REQUESTED_IDS = {
@@ -138,7 +138,7 @@ def test_benchmark_subset_runner_dry_run_reports_skips(tmp_path: Path) -> None:
             "--output-root",
             str(tmp_path),
             "--llama-cpp",
-            "/Users/zlaabsi/Documents/GitHub/llama.cpp",
+            str(tmp_path / "llama.cpp"),
             "--sample-mode",
             "quick",
             "--dry-run",

@@ -12,10 +12,8 @@ def test_run_qwen36_otq_eval_script_is_bash_3_compatible() -> None:
     assert completed.returncode == 0, completed.stderr
 
 
-def test_qwen36_overnight_scripts_are_bash_3_compatible() -> None:
+def test_qwen36_release_scripts_are_bash_3_compatible() -> None:
     scripts = [
-        Path("scripts/run_qwen36_overnight_remaining.sh"),
-        Path("scripts/launch_qwen36_overnight_remaining.sh"),
         Path("scripts/run_qwen36_representative_benchmarks.sh"),
         Path("scripts/launch_qwen36_representative_benchmarks.sh"),
         Path("scripts/run_qwen36_publication_candidate_benchmarks.sh"),

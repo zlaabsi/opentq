@@ -326,7 +326,7 @@ def now_iso() -> str:
 
 def load_matrix(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("schema") != "opentq.qwen36_long_running_benchmark_matrix.v1":
+    if payload.get("schema") != "opentq.qwen36_benchmark_matrix.v1":
         raise ValueError(f"unsupported benchmark matrix schema: {path}")
     return payload
 
@@ -1334,10 +1334,10 @@ def run_model_benchmarks(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Plan Qwen3.6 benchmark subset runs from the release matrix.")
-    parser.add_argument("--matrix", type=Path, default=Path("benchmarks/qwen36_long_running_benchmark_matrix.json"))
+    parser.add_argument("--matrix", type=Path, default=Path("benchmarks/qwen36_benchmark_matrix.json"))
     parser.add_argument("--models", default="q3,q4")
     parser.add_argument("--output-root", type=Path, default=Path("artifacts/qwen3.6-27b-benchmark-subsets"))
-    parser.add_argument("--llama-cpp", type=Path, default=Path("/Users/zlaabsi/Documents/GitHub/llama.cpp"))
+    parser.add_argument("--llama-cpp", type=Path, default=Path(os.environ.get("LLAMA_CPP_DIR", "../llama.cpp")))
     parser.add_argument("--sample-mode", choices=("smoke", "quick"), default="quick")
     parser.add_argument("--benchmark-id", action="append", default=[])
     parser.add_argument("--max-samples-per-family", type=int)

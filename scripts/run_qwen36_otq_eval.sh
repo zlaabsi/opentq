@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 export PYTHONPATH="$ROOT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 
-LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-/Users/zlaabsi/Documents/GitHub/llama.cpp}"
+LLAMA_CPP_DIR="${LLAMA_CPP_DIR:-../llama.cpp}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-artifacts/qwen3.6-27b-otq-eval}"
 SUITE="${SUITE:-benchmarks/qwen36_release_extended_samples.jsonl}"
 CTX_SIZE="${CTX_SIZE:-8192}"

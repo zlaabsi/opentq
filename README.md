@@ -54,7 +54,7 @@ The current flagship public artifact is the stock-compatible [`Qwen3.6-27B-OTQ-G
 - **Transparent allocation:** norms/state remain high precision; projection-heavy families absorb most compression.
 - **Practical quality checks:** paired BF16-vs-GGUF mini-subsets with pinned task IDs and public reproducibility data.
 - **Runtime gates:** local Apple Silicon checks with `llama.cpp`/Metal, bounded generation, release evals, and 8K prefill/decode measurements.
-- **Native tracks:** `.otq` packed and Metal/custom-runtime artifacts remain gated until the public runtime path is ready.
+- **Research runtime tracks:** native OpenTQ payloads and compressed-domain runtime work are tracked separately from stock GGUF releases.
 
 ## Public Release Matrix
 
@@ -63,8 +63,6 @@ The current flagship public artifact is the stock-compatible [`Qwen3.6-27B-OTQ-G
 | Stock GGUF | [`zlaabsi/Qwen3.6-27B-OTQ-GGUF`](https://huggingface.co/zlaabsi/Qwen3.6-27B-OTQ-GGUF) | stock `llama.cpp` | public | local text inference with standard GGUF loaders |
 | Reproducibility dataset | [`zlaabsi/Qwen3.6-27B-OTQ-GGUF-benchmarks`](https://huggingface.co/datasets/zlaabsi/Qwen3.6-27B-OTQ-GGUF-benchmarks) | JSON/CSV assets | public | pinned BF16-vs-GGUF samples, raw outputs, reports |
 | BF16 sidecar | [`zlaabsi/opentq-qwen36-bf16-sidecar`](https://huggingface.co/datasets/zlaabsi/opentq-qwen36-bf16-sidecar) | HF Jobs H200 output | public | matching BF16 baseline for the practical subset |
-| OpenTQ Packed | local `.otq` packs | OpenTQ tooling | gated | native payloads and manifests, not a user-facing runtime yet |
-| Metal/custom GGUF | local staging | `opentq-metal` / custom loader | gated | future compressed-domain Apple Silicon runtime work |
 
 ## Qwen3.6-27B GGUF Variants
 
@@ -148,9 +146,9 @@ Use `Q3_K_M` first on 32 GB Macs. Use `Q4_K_M` for the best balance. Use `Q5_K_M
 | Area | Files | Purpose |
 | --- | --- | --- |
 | Quantizer core | `src/opentq/` | codebooks, rotations, tensor quantization, packing, CLI |
-| Release scripts | `scripts/` | Qwen3.6 planning, GGUF staging, HF release reports, runtime checks |
+| Release scripts | `scripts/` | GGUF staging, HF release reports, runtime checks |
 | Benchmarks | `benchmarks/` | pinned benchmark matrix, paired BF16-vs-GGUF summaries |
-| Docs | `docs/` | architecture, release status, cleanup decisions, runtime plans |
+| Docs | `docs/` | architecture, format notes, benchmark methodology |
 | Tests | `tests/` | unit tests and release tooling checks |
 
 ## Format Family
@@ -193,29 +191,17 @@ Build release reports and status pages:
 ```bash
 uv run python scripts/build_qwen36_release_report.py
 ./scripts/status_qwen36_dynamic_ggufs.sh
-uv run python scripts/build_qwen36_cleanup_manifest.py
 ```
 
-For unattended local release work:
+## Release Scope
 
-```bash
-./scripts/launch_qwen36_quantizations.sh
-python ./scripts/status_qwen36_quantizations.py
-uv run opentq monitor --watch
-```
+OpenTQ separates stock-compatible GGUF releases from native runtime research. The public Qwen3.6-27B OTQ GGUF release uses standard `llama.cpp` tensor types and requires no custom OpenTQ runtime. Native packed payloads and custom Metal/runtime work are separate research tracks.
 
-## Release Guardrails
-
-- Do not present practical mini-subsets as full benchmark replacements.
-- Do not publish Packed or Metal-native artifacts until their public runtime gates pass.
-- Do not delete large artifacts without the cleanup manifest and an explicit cleanup decision.
-- Keep stock GGUF claims separate from custom OpenTQ runtime claims.
-- Keep `Qwen3.6-27B` naming exact; do not collapse it into older Qwen model names.
+Practical mini-subsets are reported as quantization-regression signals for the released artifacts. They are not replacements for official full-harness benchmark results.
 
 ## Further Reading
 
+- [Architecture](docs/architecture.md)
+- [Variant naming](docs/variants.md)
 - [Dynamic-compatible GGUF path](docs/dynamic-compatible-gguf.md)
-- [Inference release checklist](docs/inference-release-checklist.md)
-- [Qwen3.6 release status](docs/qwen36-release-status-2026-04-29.md)
-- [Benchmark representativeness notes](docs/qwen36-benchmark-representativeness.md)
-- [Disk cleanup arbitrage](docs/qwen36-disk-cleanup-arbitrage.md)
+- [Benchmark methodology](docs/llm-benchmark-protocol.md)
