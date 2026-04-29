@@ -30,6 +30,10 @@
 - Ran the paired BF16 sidecar on Hugging Face Jobs H200 for `Qwen/Qwen3.6-27B`, job `69f22ef7d70108f37ace1773`, and uploaded `runs/69f22ef7d70108f37ace1773/no_think.json` to `zlaabsi/opentq-qwen36-bf16-sidecar`.
 - Ran the matching local GGUF paired mini-subset for `Q3_K_M`, `Q4_K_M`, and `Q5_K_M` under `artifacts/qwen3.6-27b-benchmark-subsets-release-core/`.
 - Generated the paired BF16-vs-GGUF report under `artifacts/qwen3.6-27b-paired-bf16-quant-report/`: BF16 `40/52`, Q3 `41/52`, Q4 `39/52`, Q5 `41/52` on the same pinned no-think mini-subset.
+- Replaced the first 52-sample sidecar with a larger 232-sample paired sidecar:
+  - BF16 Hugging Face Jobs H200 job `69f235d2d2c8bd8662bd320e`, uploaded to `runs/69f235d2d2c8bd8662bd320e/no_think.json`;
+  - matching local stock `llama.cpp`/`llama-server` GGUF runs under `artifacts/qwen3.6-27b-benchmark-subsets-release-core-232/`;
+  - paired report under `artifacts/qwen3.6-27b-paired-bf16-quant-report-232/`: BF16 `157/232`, Q3 `154/232`, Q4 `155/232`, Q5 `155/232`.
 
 ## Cleanup Decision
 
@@ -61,4 +65,4 @@ The decision is documented in `docs/qwen36-disk-cleanup-arbitrage.md`.
 
 ## Public Claim Boundary
 
-The HF card may claim stock GGUF usability, M1 Max measured runtime gates, Q5 local validation, and paired practical no-think mini-subset deltas. It must not present the 52-sample sidecar as a full official benchmark replacement or compare its MMLU-Pro/GPQA percentages directly to Qwen's full-harness official scores.
+The HF card may claim stock GGUF usability, M1 Max measured runtime gates, Q5 local validation, and paired practical no-think mini-subset deltas. It must not present the 232-sample sidecar as a full official benchmark replacement or compare its MMLU-Pro/GPQA percentages directly to Qwen's full-harness official scores.
