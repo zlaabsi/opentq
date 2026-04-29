@@ -14,24 +14,41 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.patches import Rectangle
 import numpy as np
 
 
 PALETTE = {
-    "q3": "#7cc7ff",
-    "q4": "#0b3d73",
-    "q5": "#2f80c2",
-    "q6": "#125ea5",
-    "q8": "#061a33",
-    "f16": "#cfe9ff",
-    "ref": "#6f93b7",
-    "ink": "#0a1628",
-    "muted": "#5d7692",
-    "grid": "#d8e8f7",
-    "paper": "#f8fbff",
+    "paper": "#fbfaf6",
+    "panel": "#f5f2eb",
+    "ink": "#171717",
+    "muted": "#68645d",
+    "faint": "#a8a29a",
+    "grid": "#e6e0d6",
+    "spine": "#8e887e",
+    "cream": "#e8e2d4",
+    "copper": "#c86f24",
+    "rust": "#8d4b3f",
+    "maroon": "#5a3430",
+    "blue": "#2f73b7",
+    "sky": "#76a9d4",
+    "green": "#4d8a58",
+    "olive": "#76865c",
+    "black": "#211817",
 }
-
-
+TYPE_COLORS = {
+    "F16": "#e8e2d4",
+    "Q3_K": "#2f73b7",
+    "Q4_K": "#76a9d4",
+    "Q5_K": "#c86f24",
+    "Q6_K": "#8d4b3f",
+    "Q8_0": "#211817",
+}
+SCORE_CMAP = LinearSegmentedColormap.from_list(
+    "opentq_score",
+    ["#fbfaf6", "#e7e0d2", "#b6c6a2", "#4d8a58"],
+)
 @dataclass(frozen=True)
 class VariantEvidence:
     name: str
@@ -59,25 +76,38 @@ def configure_matplotlib() -> None:
     plt.rcParams.update(
         {
             "font.family": "sans-serif",
-            "font.sans-serif": ["DejaVu Sans", "Helvetica Neue", "Avenir Next"],
-            "font.size": 8.6,
-            "axes.titlesize": 10.2,
-            "axes.labelsize": 9.1,
-            "xtick.labelsize": 8.1,
-            "ytick.labelsize": 8.1,
-            "legend.fontsize": 8.2,
+            "font.sans-serif": ["Avenir Next", "Helvetica Neue", "Inter", "DejaVu Sans"],
+            "font.size": 9.2,
+            "axes.titlesize": 13.4,
+            "axes.labelsize": 9.7,
+            "xtick.labelsize": 8.7,
+            "ytick.labelsize": 8.7,
+            "legend.fontsize": 8.3,
             "figure.dpi": 150,
             "savefig.dpi": 320,
             "savefig.bbox": "tight",
-            "savefig.pad_inches": 0.06,
-            "lines.linewidth": 2.0,
-            "lines.markersize": 6,
-            "axes.linewidth": 0.8,
+            "savefig.pad_inches": 0.08,
+            "lines.linewidth": 2.2,
+            "lines.markersize": 6.5,
+            "axes.linewidth": 0.85,
             "axes.grid": True,
-            "grid.alpha": 0.22,
-            "grid.linewidth": 0.75,
+            "grid.color": PALETTE["grid"],
+            "grid.alpha": 0.72,
+            "grid.linewidth": 0.72,
+            "grid.linestyle": "--",
             "axes.axisbelow": True,
-            "legend.frameon": False,
+            "axes.facecolor": PALETTE["paper"],
+            "figure.facecolor": PALETTE["paper"],
+            "savefig.facecolor": PALETTE["paper"],
+            "axes.edgecolor": PALETTE["spine"],
+            "axes.labelcolor": PALETTE["ink"],
+            "xtick.color": PALETTE["muted"],
+            "ytick.color": PALETTE["muted"],
+            "text.color": PALETTE["ink"],
+            "legend.frameon": True,
+            "legend.facecolor": PALETTE["paper"],
+            "legend.edgecolor": "#d4cec4",
+            "legend.framealpha": 0.95,
             "figure.constrained_layout.use": False,
         }
     )
@@ -116,12 +146,12 @@ def evidence_variants(repo: Path) -> list[VariantEvidence]:
 
 def variant_color(name: str) -> str:
     if "Q3" in name:
-        return PALETTE["q3"]
+        return PALETTE["blue"]
     if "Q4" in name:
-        return PALETTE["q4"]
+        return PALETTE["copper"]
     if "Q5" in name:
-        return PALETTE["q5"]
-    return PALETTE["ref"]
+        return PALETTE["maroon"]
+    return PALETTE["faint"]
 
 
 def clean_label(label: str) -> str:
@@ -270,20 +300,51 @@ def quant_eval_rows(quant_eval_root: Path | None) -> list[dict[str, Any]]:
 
 
 def polish_axes(ax: plt.Axes) -> None:
+    ax.set_facecolor(PALETTE["paper"])
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.grid(True, axis="y", which="major", linestyle="-", linewidth=0.75, alpha=0.24)
+    ax.spines["left"].set_color(PALETTE["spine"])
+    ax.spines["bottom"].set_color(PALETTE["spine"])
+    ax.tick_params(colors=PALETTE["muted"], length=3.5, width=0.75)
+    ax.grid(True, axis="y", which="major", linestyle="--", linewidth=0.72, alpha=0.78)
     ax.minorticks_on()
-    ax.grid(True, axis="y", which="minor", linestyle="-", linewidth=0.25, alpha=0.12)
+    ax.grid(True, axis="y", which="minor", linestyle=":", linewidth=0.45, alpha=0.35)
     ax.set_axisbelow(True)
 
 
-def save_figure(fig: plt.Figure, stem: Path) -> None:
+def add_title(ax: plt.Axes, title: str, subtitle: str | None = None) -> None:
+    ax.set_title(title, loc="left", fontweight="bold", fontsize=13.6, pad=18 if subtitle else 10)
+    if subtitle:
+        ax.text(
+            0.0,
+            1.02,
+            subtitle,
+            transform=ax.transAxes,
+            ha="left",
+            va="bottom",
+            fontsize=8.9,
+            color=PALETTE["muted"],
+        )
+
+
+def add_cell_grid(ax: plt.Axes, rows: int, cols: int, *, color: str = "#e7e1d8") -> None:
+    ax.grid(False)
+    ax.set_xticks(np.arange(-0.5, cols, 1), minor=True)
+    ax.set_yticks(np.arange(-0.5, rows, 1), minor=True)
+    ax.grid(which="minor", color=color, linestyle="-", linewidth=0.8)
+    ax.tick_params(which="minor", bottom=False, left=False)
+
+
+def save_figure(fig: plt.Figure, stem: Path, caption: str | None = None) -> None:
     stem.parent.mkdir(parents=True, exist_ok=True)
-    fig.tight_layout(pad=0.7)
-    fig.savefig(stem.with_suffix(".svg"), bbox_inches="tight", pad_inches=0.05)
-    fig.savefig(stem.with_suffix(".pdf"), bbox_inches="tight", pad_inches=0.05)
-    fig.savefig(stem.with_suffix(".png"), dpi=320, facecolor="white", bbox_inches="tight", pad_inches=0.05)
+    if caption:
+        fig.text(0.012, 0.014, caption, ha="left", va="bottom", fontsize=7.9, color=PALETTE["muted"])
+        fig.tight_layout(pad=0.9, rect=(0.0, 0.075, 1.0, 1.0))
+    else:
+        fig.tight_layout(pad=0.9)
+    for suffix in (".svg", ".pdf"):
+        fig.savefig(stem.with_suffix(suffix), bbox_inches="tight", pad_inches=0.06, facecolor=PALETTE["paper"])
+    fig.savefig(stem.with_suffix(".png"), dpi=320, facecolor=PALETTE["paper"], bbox_inches="tight", pad_inches=0.06)
     plt.close(fig)
 
 
@@ -307,43 +368,62 @@ def plot_runtime_frontier(bench: list[dict[str, Any]], artifacts: list[dict[str,
     prefill = [bench_metric(bench, variant, "pp8192") for variant in variants]
     decode = [bench_metric(bench, variant, "tg128") for variant in variants]
 
-    fig, ax = plt.subplots(figsize=(7.0, 3.4))
+    fig, ax = plt.subplots(figsize=(7.6, 4.0))
+    order = np.argsort(sizes)
+    ax.plot(
+        np.array(sizes)[order],
+        np.array(prefill)[order],
+        color=PALETTE["faint"],
+        linewidth=1.45,
+        alpha=0.85,
+        zorder=1,
+    )
     for variant, x, y, tg in zip(variants, sizes, prefill, decode):
+        marker = "o" if "Q3" in variant else "s" if "Q4" in variant else "D"
         ax.scatter(
             x,
             y,
-            s=240 + tg * 18,
+            s=170 + tg * 15,
             color=variant_color(variant),
-            edgecolor=PALETTE["ink"],
-            linewidth=0.9,
+            marker=marker,
+            edgecolor=PALETTE["paper"],
+            linewidth=1.8,
             zorder=3,
         )
+        ax.scatter(x, y, s=205 + tg * 15, facecolor="none", edgecolor=variant_color(variant), linewidth=1.05, zorder=2)
+        label_offset = (20, -8) if "Q5" in variant else (14, -2 if "Q3" in variant else -24)
+        label_align = "left"
         ax.annotate(
-            f"{clean_label(variant)}\n{tg:.2f} tok/s decode",
+            f"{clean_label(variant)}\n{x:.1f} GiB · {tg:.2f} tok/s decode",
             (x, y),
             textcoords="offset points",
-            xytext=(12, -4 if "Q3" in variant else -24),
-            fontsize=8.5,
+            xytext=label_offset,
+            fontsize=8.4,
             color=PALETTE["ink"],
+            ha=label_align,
+            arrowprops={"arrowstyle": "-", "color": PALETTE["faint"], "lw": 0.8},
         )
-    ax.plot(sizes, prefill, color="#7fb5df", linewidth=1.4, alpha=0.8, zorder=2)
     ax.set_xlabel("GGUF artifact size (GiB)")
-    ax.set_ylabel("prefill throughput at 8K context (tok/s)")
-    ax.set_title("M1 Max size / prefill / decode frontier", loc="left", fontweight="semibold")
-    ax.set_xlim(max(0, min(sizes) - 1.2), max(sizes) + 2.0)
+    ax.set_ylabel("8K prefill throughput (tokens/s)")
+    add_title(
+        ax,
+        "M1 Max runtime frontier",
+        "Each point is a released GGUF artifact; marker size tracks measured tg128 decode throughput.",
+    )
+    ax.set_xlim(max(0, min(sizes) - 1.2), max(sizes) + 2.8)
     ax.set_ylim(max(0, min(prefill) - 2.0), max(prefill) + 4.0)
     ax.text(
-        0.99,
-        0.04,
-        "bubble label = measured tg128 decode throughput",
+        0.015,
+        0.06,
+        "Smaller and higher is better for local agent workloads with long context.",
         transform=ax.transAxes,
-        ha="right",
+        ha="left",
         va="bottom",
-        fontsize=8,
+        fontsize=8.2,
         color=PALETTE["muted"],
     )
     polish_axes(ax)
-    save_figure(fig, stem)
+    save_figure(fig, stem, "M1 Max 32 GB, llama.cpp Metal backend, 8192-token prefill and 128-token decode checks.")
 
 
 def plot_prefill_decode_tradeoff(bench: list[dict[str, Any]], stem: Path) -> None:
@@ -351,19 +431,33 @@ def plot_prefill_decode_tradeoff(bench: list[dict[str, Any]], stem: Path) -> Non
     tests = [("pp8192", "Prefill 8K"), ("tg128", "Decode 128")]
     y = np.arange(len(tests))
 
-    fig, ax = plt.subplots(figsize=(7.0, 2.85))
+    fig, ax = plt.subplots(figsize=(7.6, 3.05))
+    ax.axvspan(0, 12, color=PALETTE["panel"], zorder=0)
     for idx, variant in enumerate(variants):
         values = [bench_metric(bench, variant, test) for test, _ in tests]
-        offset = (idx - (len(variants) - 1) / 2) * 0.18
-        ax.scatter(values, y + offset, s=95, color=variant_color(variant), edgecolor=PALETTE["ink"], linewidth=0.7, label=clean_label(variant), zorder=3)
+        offset = (idx - (len(variants) - 1) / 2) * 0.17
         for value, yi in zip(values, y + offset):
-            ax.annotate(f"{value:.2f}", (value, yi), textcoords="offset points", xytext=(8, -3), fontsize=8.2, color=PALETTE["ink"])
+            ax.hlines(yi, 0, value, color=variant_color(variant), linewidth=1.15, alpha=0.52, zorder=1)
+        ax.scatter(
+            values,
+            y + offset,
+            s=98,
+            color=variant_color(variant),
+            edgecolor=PALETTE["paper"],
+            linewidth=1.4,
+            label=clean_label(variant),
+            zorder=3,
+        )
+        for value, yi in zip(values, y + offset):
+            ax.annotate(f"{value:.2f}", (value, yi), textcoords="offset points", xytext=(8, -3), fontsize=8.1, color=PALETTE["ink"])
     ax.set_yticks(y, [label for _, label in tests])
-    ax.set_xlabel("tokens / second")
-    ax.set_title("Measured prefill vs decode tradeoff", loc="left", fontweight="semibold")
-    ax.legend(loc="upper right", ncol=len(variants), handletextpad=0.35, columnspacing=0.9)
+    ax.set_xlabel("tokens per second")
+    add_title(ax, "Prefill / decode tradeoff", "Same runtime, same prompt sizes; no cross-runtime score mixing.")
+    ax.legend(loc="lower right", ncol=len(variants), handletextpad=0.35, columnspacing=0.9)
+    ax.set_ylim(-0.55, len(tests) - 0.45)
     polish_axes(ax)
-    save_figure(fig, stem)
+    ax.grid(True, axis="x", which="major")
+    save_figure(fig, stem, "Prefill dominates long-context wall-clock; decode-only throughput is not sufficient for release claims.")
 
 
 def plot_eval_latency(rows: list[dict[str, Any]], stem: Path) -> None:
@@ -374,19 +468,27 @@ def plot_eval_latency(rows: list[dict[str, Any]], stem: Path) -> None:
     p95 = [float(row["latency_seconds_p95"]) for row in release]
     x = np.arange(len(variants))
 
-    fig, ax = plt.subplots(figsize=(4.1, 3.0))
-    bars = ax.bar(x, mean, color=[variant_color(v) for v in variants], edgecolor="#2d2d2d", linewidth=0.7, label="mean")
-    ax.plot(x, p95, color="#0f5f9f", marker="o", linewidth=2.0, label="p95", zorder=3)
-    ax.bar_label(bars, labels=[f"{value:.1f}s" for value in mean], padding=2, fontsize=8.5)
+    fig, ax = plt.subplots(figsize=(5.0, 3.35))
+    bars = ax.bar(
+        x,
+        mean,
+        color=[variant_color(v) for v in variants],
+        edgecolor=PALETTE["paper"],
+        linewidth=1.2,
+        width=0.55,
+        label="mean",
+    )
+    ax.plot(x, p95, color=PALETTE["ink"], marker="o", linewidth=2.0, label="p95", zorder=3)
+    ax.bar_label(bars, labels=[f"{value:.1f}s" for value in mean], padding=3, fontsize=8.4, color=PALETTE["ink"])
     for xi, value in zip(x, p95):
-        ax.annotate(f"{value:.1f}s", (xi, value), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8.5, color=PALETTE["ink"])
+        ax.annotate(f"{value:.1f}s", (xi, value), textcoords="offset points", xytext=(0, 7), ha="center", fontsize=8.4, color=PALETTE["ink"])
 
     ax.set_xticks(x, labels)
     ax.set_ylabel("seconds / sample")
-    ax.set_title("Release-gate latency by quantized artifact", loc="left", fontweight="semibold")
-    ax.legend(loc="upper right", ncol=2, columnspacing=0.9)
+    add_title(ax, "Release-gate latency", "Mean bars with p95 overlay from deterministic local checks.")
+    ax.legend(loc="upper right", ncol=2, columnspacing=0.9, handlelength=1.4)
     polish_axes(ax)
-    save_figure(fig, stem)
+    save_figure(fig, stem, "Latency is a release guardrail, not a substitute for benchmark quality evaluation.")
 
 
 def plot_pass_rate(rows: list[dict[str, Any]], stem: Path) -> None:
@@ -399,19 +501,23 @@ def plot_pass_rate(rows: list[dict[str, Any]], stem: Path) -> None:
         for j, category in enumerate(categories):
             matrix[i, j] = lookup.get((variant, category), np.nan)
 
-    fig, ax = plt.subplots(figsize=(7.0, 2.6))
-    image = ax.imshow(matrix, vmin=0.0, vmax=1.0, cmap="Blues", aspect="auto")
+    fig, ax = plt.subplots(figsize=(7.6, 2.95))
+    image = ax.imshow(matrix, vmin=0.0, vmax=1.0, cmap=SCORE_CMAP, aspect="auto")
     ax.set_xticks(np.arange(len(categories)), [c.replace("_", " ") for c in categories], rotation=28, ha="right")
     ax.set_yticks(np.arange(len(variants)), [clean_label(v) for v in variants])
+    add_cell_grid(ax, len(variants), len(categories))
     for i in range(len(variants)):
         for j in range(len(categories)):
             value = matrix[i, j]
-            ax.text(j, i, "n/a" if np.isnan(value) else f"{value:.0%}", ha="center", va="center", fontsize=9, color=PALETTE["ink"])
+            ax.text(j, i, "n/a" if np.isnan(value) else f"{value:.0%}", ha="center", va="center", fontsize=9.2, color=PALETTE["ink"])
+            if not np.isnan(value) and value >= 0.999:
+                ax.add_patch(Rectangle((j - 0.43, i - 0.36), 0.86, 0.72, fill=False, edgecolor=PALETTE["copper"], linewidth=1.5))
 
-    ax.set_title("Release-gate coverage by category", loc="left", fontweight="semibold")
+    add_title(ax, "Release-gate coverage", "Per-category pass rate; copper outlines mark saturated categories.")
     cbar = fig.colorbar(image, ax=ax, fraction=0.035, pad=0.02)
     cbar.ax.yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
-    save_figure(fig, stem)
+    cbar.outline.set_edgecolor(PALETTE["spine"])
+    save_figure(fig, stem, "Deterministic release suites catch runtime regressions; they are intentionally smaller than academic benchmarks.")
 
 
 def plot_release_scorecard(
@@ -438,18 +544,31 @@ def plot_release_scorecard(
         scaled = (arr - arr.min()) / (arr.max() - arr.min())
         normalized[row_idx] = scaled if higher_is_better else 1.0 - scaled
 
-    fig, ax = plt.subplots(figsize=(7.0, 3.1))
-    image = ax.imshow(normalized, vmin=0.0, vmax=1.0, cmap="Blues", aspect="auto")
+    fig, ax = plt.subplots(figsize=(7.6, 3.35))
+    image = ax.imshow(normalized, vmin=0.0, vmax=1.0, cmap=SCORE_CMAP, aspect="auto")
     ax.set_xticks(np.arange(len(variants)), labels)
     ax.set_yticks(np.arange(len(metrics)), [metric[0] for metric in metrics])
+    add_cell_grid(ax, len(metrics), len(variants))
     for row_idx, (_, values, unit, _) in enumerate(metrics):
+        best_col = int(np.nanargmax(normalized[row_idx]))
         for col_idx, value in enumerate(values):
-            text_color = "white" if normalized[row_idx, col_idx] >= 0.58 else PALETTE["ink"]
-            ax.text(col_idx, row_idx, f"{value:.2f} {unit}", ha="center", va="center", fontsize=8.2, color=text_color)
-    ax.set_title("Release decision scorecard", loc="left", fontweight="semibold")
+            ax.text(col_idx, row_idx, f"{value:.2f} {unit}", ha="center", va="center", fontsize=8.2, color=PALETTE["ink"])
+            if col_idx == best_col:
+                ax.add_patch(
+                    Rectangle(
+                        (col_idx - 0.43, row_idx - 0.36),
+                        0.86,
+                        0.72,
+                        fill=False,
+                        edgecolor=PALETTE["copper"],
+                        linewidth=1.6,
+                    )
+                )
+    add_title(ax, "Release decision scorecard", "Normalized within this artifact set; copper boxes mark the strongest local tradeoff per row.")
     cbar = fig.colorbar(image, ax=ax, fraction=0.035, pad=0.02)
     cbar.set_label("relative fit for local release", fontsize=8.2)
-    save_figure(fig, stem)
+    cbar.outline.set_edgecolor(PALETTE["spine"])
+    save_figure(fig, stem, "This matrix compares release ergonomics, not model intelligence. Quality is reported by paired benchmark subsets.")
 
 
 def plot_tensor_allocation(rows: list[dict[str, Any]], stem: Path) -> None:
@@ -457,20 +576,47 @@ def plot_tensor_allocation(rows: list[dict[str, Any]], stem: Path) -> None:
     tensor_types = ["F16", "Q3_K", "Q4_K", "Q5_K", "Q6_K", "Q8_0"]
     lookup = {(row["variant"], row["tensor_type"]): int(row["count"]) for row in rows}
     totals = np.array([sum(lookup.get((variant, t), 0) for t in tensor_types) for variant in variants], dtype=float)
-    fig, ax = plt.subplots(figsize=(7.0, 3.15))
+    fig, ax = plt.subplots(figsize=(7.6, 3.45))
     bottom = np.zeros(len(variants))
-    colors = {"F16": PALETTE["f16"], "Q3_K": PALETTE["q3"], "Q4_K": "#4494d1", "Q5_K": PALETTE["q5"], "Q6_K": PALETTE["q6"], "Q8_0": PALETTE["q8"]}
+    labels = [clean_label(v) for v in variants]
     for tensor_type in tensor_types:
         counts = np.array([lookup.get((variant, tensor_type), 0) for variant in variants], dtype=float)
         values = np.divide(counts, totals, out=np.zeros_like(counts), where=totals > 0)
-        ax.bar([clean_label(v) for v in variants], values, bottom=bottom, label=tensor_type, color=colors[tensor_type], edgecolor="white", linewidth=0.6)
+        bars = ax.bar(
+            labels,
+            values,
+            bottom=bottom,
+            label=tensor_type,
+            color=TYPE_COLORS[tensor_type],
+            edgecolor=PALETTE["paper"],
+            linewidth=1.15,
+            width=0.76,
+        )
+        for bar, value, base in zip(bars, values, bottom):
+            if value < 0.055:
+                continue
+            text_color = "white" if tensor_type in {"Q8_0", "Q6_K", "Q3_K"} else PALETTE["ink"]
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                base + value / 2,
+                f"{value:.0%}",
+                ha="center",
+                va="center",
+                fontsize=8.0,
+                color=text_color,
+            )
         bottom += values
     ax.yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
     ax.set_ylabel("share of mapped tensors")
-    ax.set_title("Dynamic GGUF tensor-type allocation", loc="left", fontweight="semibold")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.18), ncol=len(tensor_types), columnspacing=0.8, handletextpad=0.3)
+    add_title(
+        ax,
+        "Dynamic GGUF tensor-type allocation",
+        "Count-based tensor map produced by the OpenTQ policy; skipped vision tensors are excluded.",
+    )
+    ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), ncol=1, columnspacing=0.8, handletextpad=0.5)
+    ax.set_ylim(0, 1.0)
     polish_axes(ax)
-    save_figure(fig, stem)
+    save_figure(fig, stem, "The allocation intentionally keeps normalization/state tensors high precision while lowering dense projection tensors.")
 
 
 def plot_allocation_policy(rows: list[dict[str, Any]], stem: Path) -> None:
@@ -487,7 +633,7 @@ def plot_allocation_policy(rows: list[dict[str, Any]], stem: Path) -> None:
     categories = [category for category in priority if any(row["category"] == category for row in rows)]
     tensor_types = ["F16", "Q3_K", "Q4_K", "Q5_K", "Q6_K", "Q8_0"]
     type_index = {tensor_type: idx for idx, tensor_type in enumerate(tensor_types)}
-    fig, axes = plt.subplots(1, len(variants), figsize=(7.0, 3.45), sharey=True)
+    fig, axes = plt.subplots(1, len(variants), figsize=(7.8, 3.75), sharey=True)
     if len(variants) == 1:
         axes = [axes]
     for ax, variant in zip(axes, variants):
@@ -501,20 +647,78 @@ def plot_allocation_policy(rows: list[dict[str, Any]], stem: Path) -> None:
                 tensor_type = row["tensor_type"]
                 if tensor_type in type_index:
                     matrix[i, type_index[tensor_type]] = int(row["count"]) / total
-        ax.imshow(np.nan_to_num(matrix), vmin=0.0, vmax=1.0, cmap="Blues", aspect="auto")
-        ax.set_title(clean_label(variant), fontweight="semibold")
-        ax.set_xticks(np.arange(len(tensor_types)), tensor_types, rotation=35, ha="right")
-        ax.set_yticks(np.arange(len(categories)), [category.replace("_", " ") for category in categories])
+        ax.set_xlim(-0.5, len(tensor_types) - 0.5)
+        ax.set_ylim(len(categories) - 0.5, -0.5)
+        ax.set_facecolor(PALETTE["paper"])
         for i in range(len(categories)):
-            for j in range(len(tensor_types)):
+            row_values = np.nan_to_num(matrix[i])
+            dominant = int(np.argmax(row_values)) if row_values.any() else -1
+            for j, tensor_type in enumerate(tensor_types):
                 value = matrix[i, j]
+                base = Rectangle(
+                    (j - 0.5, i - 0.5),
+                    1.0,
+                    1.0,
+                    facecolor="#f2eee6",
+                    edgecolor="#e1dbd0",
+                    linewidth=0.8,
+                )
+                ax.add_patch(base)
                 if np.isnan(value) or value <= 0:
                     continue
-                text_color = "white" if value >= 0.75 else PALETTE["ink"]
-                ax.text(j, i, f"{value:.0%}", ha="center", va="center", fontsize=7.0, color=text_color)
+                color = TYPE_COLORS[tensor_type]
+                ax.add_patch(
+                    Rectangle(
+                        (j - 0.5, i - 0.5),
+                        1.0,
+                        1.0,
+                        facecolor=color,
+                        edgecolor="#e1dbd0",
+                        linewidth=0.8,
+                        alpha=0.18 + 0.74 * value,
+                    )
+                )
+                if j == dominant and value >= 0.5:
+                    ax.add_patch(
+                        Rectangle(
+                            (j - 0.43, i - 0.38),
+                            0.86,
+                            0.76,
+                            fill=False,
+                            edgecolor=PALETTE["copper"],
+                            linewidth=1.45,
+                        )
+                    )
+                text_color = "white" if value >= 0.82 and tensor_type in {"Q3_K", "Q6_K", "Q8_0"} else PALETTE["ink"]
+                ax.text(j, i, f"{value:.0%}", ha="center", va="center", fontsize=7.4, color=text_color)
+        ax.set_title(clean_label(variant), fontweight="bold", fontsize=12.2, pad=11)
+        ax.set_xticks(np.arange(len(tensor_types)), tensor_types, rotation=35, ha="right")
+        ax.set_yticks(np.arange(len(categories)), [category.replace("_", " ") for category in categories])
+        ax.tick_params(axis="both", length=0, colors=PALETTE["ink"])
+        for spine in ax.spines.values():
+            spine.set_visible(True)
+            spine.set_color(PALETTE["spine"])
+            spine.set_linewidth(0.85)
     axes[0].set_ylabel("tensor family")
-    fig.suptitle("Where OpenTQ spends precision", x=0.02, y=1.0, ha="left", fontweight="semibold", fontsize=10.2)
-    save_figure(fig, stem)
+    fig.suptitle(
+        "Where OpenTQ spends precision",
+        x=0.02,
+        y=1.02,
+        ha="left",
+        fontweight="bold",
+        fontsize=14.0,
+        color=PALETTE["ink"],
+    )
+    fig.text(
+        0.02,
+        0.935,
+        "Rows show tensor families; columns show GGUF tensor types. Copper boxes mark the dominant allocation path.",
+        ha="left",
+        va="top",
+        fontsize=8.9,
+        color=PALETTE["muted"],
+    )
+    save_figure(fig, stem, "Family-level allocation makes the policy auditable: state and norms stay F16, projections absorb most quantization.")
 
 
 def plot_official_baseline(rows: list[dict[str, Any]], stem: Path) -> None:
@@ -530,19 +734,22 @@ def plot_official_baseline(rows: list[dict[str, Any]], stem: Path) -> None:
     plot_rows = selected
     labels = [str(row["benchmark"]) for row in plot_rows]
     scores = [float(row["score"]) for row in plot_rows]
-    colors = [("#9cd5ff" if row["category"] == "Coding Agent" else "#3187c7" if row["category"] == "Knowledge" else "#0b3d73") for row in plot_rows]
+    colors = [
+        (PALETTE["green"] if row["category"] == "Coding Agent" else PALETTE["blue"] if row["category"] == "Knowledge" else PALETTE["copper"])
+        for row in plot_rows
+    ]
     y = np.arange(len(plot_rows))
 
-    fig, ax = plt.subplots(figsize=(7.0, 4.4))
-    bars = ax.barh(y, scores, color=colors, edgecolor="#2d2d2d", linewidth=0.55)
-    ax.bar_label(bars, labels=[f"{score:.1f}" for score in scores], padding=3, fontsize=8.4)
+    fig, ax = plt.subplots(figsize=(7.6, 4.6))
+    bars = ax.barh(y, scores, color=colors, edgecolor=PALETTE["paper"], linewidth=1.0)
+    ax.bar_label(bars, labels=[f"{score:.1f}" for score in scores], padding=3, fontsize=8.3, color=PALETTE["ink"])
     ax.set_yticks(y, labels)
     ax.invert_yaxis()
     ax.set_xlim(0, 100)
     ax.set_xlabel("official Qwen score")
-    ax.set_title("Official Qwen3.6-27B BF16 reference", loc="left", fontweight="semibold")
+    add_title(ax, "Official Qwen3.6-27B BF16 reference", "External vendor scores; not mixed with OTQ unless task definitions match.")
     polish_axes(ax)
-    save_figure(fig, stem)
+    save_figure(fig, stem, "Use this only as a reference table until a paired harness runs the same task and scoring rule.")
 
 
 def plot_quant_eval(rows: list[dict[str, Any]], stem: Path) -> None:
@@ -553,22 +760,22 @@ def plot_quant_eval(rows: list[dict[str, Any]], stem: Path) -> None:
     p95 = [float(row["latency_seconds_p95"]) for row in rows]
     x = np.arange(len(rows))
 
-    fig, axes = plt.subplots(1, 2, figsize=(7.0, 3.0))
-    bars = axes[0].bar(x, pass_rate, color=[variant_color(row["model"]) for row in rows], edgecolor="#2d2d2d", linewidth=0.7)
-    axes[0].bar_label(bars, labels=[f"{value:.0%}" for value in pass_rate], padding=2, fontsize=8.5)
+    fig, axes = plt.subplots(1, 2, figsize=(7.6, 3.15))
+    bars = axes[0].bar(x, pass_rate, color=[variant_color(row["model"]) for row in rows], edgecolor=PALETTE["paper"], linewidth=1.1)
+    axes[0].bar_label(bars, labels=[f"{value:.0%}" for value in pass_rate], padding=2, fontsize=8.4)
     axes[0].set_xticks(x, labels, rotation=18, ha="right")
     axes[0].set_ylim(0, 1.05)
     axes[0].yaxis.set_major_formatter(ticker.PercentFormatter(xmax=1.0))
-    axes[0].set_title("OTQ eval pass rate", loc="left", fontweight="semibold")
+    add_title(axes[0], "OTQ eval pass rate")
     polish_axes(axes[0])
 
-    bars = axes[1].bar(x, p95, color=[variant_color(row["model"]) for row in rows], edgecolor="#2d2d2d", linewidth=0.7)
-    axes[1].bar_label(bars, labels=[f"{value:.1f}s" for value in p95], padding=2, fontsize=8.5)
+    bars = axes[1].bar(x, p95, color=[variant_color(row["model"]) for row in rows], edgecolor=PALETTE["paper"], linewidth=1.1)
+    axes[1].bar_label(bars, labels=[f"{value:.1f}s" for value in p95], padding=2, fontsize=8.4)
     axes[1].set_xticks(x, labels, rotation=18, ha="right")
     axes[1].set_ylabel("p95 seconds")
-    axes[1].set_title("OTQ eval latency", loc="left", fontweight="semibold")
+    add_title(axes[1], "OTQ eval latency")
     polish_axes(axes[1])
-    save_figure(fig, stem)
+    save_figure(fig, stem, "OTQ task runs are only comparable when prompts, split, runtime, and scoring rule are pinned.")
 
 
 def figure_links(name: str) -> str:
