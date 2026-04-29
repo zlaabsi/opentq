@@ -14,13 +14,14 @@ NO_THINK_MAX_TOKENS="${NO_THINK_MAX_TOKENS:-512}"
 THINKING_MAX_TOKENS="${THINKING_MAX_TOKENS:-2048}"
 UPLOAD_REPO="${UPLOAD_REPO:-zlaabsi/opentq-qwen36-bf16-sidecar}"
 OPENTQ_REF="${OPENTQ_REF:-$(git rev-parse HEAD)}"
+HF_BIN="${HF_BIN:-uvx --from huggingface_hub hf}"
 
 if [ "$MODEL_ID" != "Qwen/Qwen3.6-27B" ]; then
   echo "Refusing wrong model id: $MODEL_ID" >&2
   exit 1
 fi
 
-hf jobs uv run \
+$HF_BIN jobs uv run \
   --detach \
   --flavor "$FLAVOR" \
   --timeout "$TIMEOUT" \
