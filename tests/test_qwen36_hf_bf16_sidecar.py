@@ -88,11 +88,26 @@ def test_empty_eval_payload_is_report_compatible() -> None:
     assert payload["model"]["kind"] == "hf_transformers_bf16"
 
 
-def test_embedded_runner_covers_remote_smoke_adapters() -> None:
+def test_embedded_runner_covers_remote_release_adapters() -> None:
     module = load_sidecar_module()
     runner = module.EmbeddedSmokeRunner()
 
-    assert set(runner.ADAPTERS) == {"mmlu_pro", "gpqa", "aime"}
+    assert set(runner.ADAPTERS) == {
+        "mmlu",
+        "mmlu_pro",
+        "arc",
+        "hellaswag",
+        "gsm8k",
+        "math",
+        "gpqa",
+        "bbh",
+        "truthfulqa",
+        "winogrande",
+        "drop",
+        "piqa",
+        "commonsenseqa",
+        "aime",
+    }
     assert runner.ADAPTERS["mmlu_pro"].revision == "54611cde22c74cca43dd78732198de6abe971398"
     assert runner.ADAPTERS["gpqa"].revision == "284143babc24a94fbac45d143333b2307e64ff80"
     assert runner.ADAPTERS["aime"].revision == "10b4e45b7a503075d4da8a0d57916a4f06ce6bd2"

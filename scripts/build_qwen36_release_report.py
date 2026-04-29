@@ -15,6 +15,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.colors import TwoSlopeNorm
 from matplotlib.patches import Rectangle
 import numpy as np
 
@@ -48,6 +49,10 @@ TYPE_COLORS = {
 SCORE_CMAP = LinearSegmentedColormap.from_list(
     "opentq_score",
     ["#fbfaf6", "#e7e0d2", "#b6c6a2", "#4d8a58"],
+)
+DELTA_CMAP = LinearSegmentedColormap.from_list(
+    "opentq_delta",
+    [PALETTE["rust"], "#eadfd5", PALETTE["paper"], "#d5dfc3", PALETTE["green"]],
 )
 @dataclass(frozen=True)
 class VariantEvidence:
@@ -335,12 +340,13 @@ def add_cell_grid(ax: plt.Axes, rows: int, cols: int, *, color: str = "#e7e1d8")
     ax.tick_params(which="minor", bottom=False, left=False)
 
 
-def save_figure(fig: plt.Figure, stem: Path, caption: str | None = None) -> None:
+def save_figure(fig: plt.Figure, stem: Path, caption: str | None = None, *, tight: bool = True) -> None:
     stem.parent.mkdir(parents=True, exist_ok=True)
     if caption:
         fig.text(0.012, 0.014, caption, ha="left", va="bottom", fontsize=6.8, color=PALETTE["muted"])
-        fig.tight_layout(pad=0.9, rect=(0.0, 0.075, 1.0, 1.0))
-    else:
+        if tight:
+            fig.tight_layout(pad=0.9, rect=(0.0, 0.075, 1.0, 1.0))
+    elif tight:
         fig.tight_layout(pad=0.9)
     for suffix in (".svg", ".pdf"):
         fig.savefig(stem.with_suffix(suffix), bbox_inches="tight", pad_inches=0.06, facecolor=PALETTE["paper"])
@@ -751,6 +757,159 @@ def plot_quant_eval(rows: list[dict[str, Any]], stem: Path) -> None:
     save_figure(fig, stem, "OTQ task runs are only comparable when prompts, split, runtime, and scoring rule are pinned.")
 
 
+def paired_summary_rows(repo: Path) -> list[dict[str, Any]]:
+    path = repo / "benchmarks" / "paired_bf16_quant_summary.json"
+    if not path.exists():
+        return []
+    payload = load_json(path)
+    return list(payload.get("rows", []))
+
+
+def plot_paired_bf16_quant(rows: list[dict[str, Any]], stem: Path) -> None:
+    if not rows:
+        return
+    total = next((row for row in rows if row.get("benchmark") == "TOTAL"), None)
+    benchmarks = [row for row in rows if row.get("benchmark") != "TOTAL"]
+    if not total or not benchmarks:
+        return
+
+    variants = [
+        ("BF16", "bf16_rate", PALETTE["cream"]),
+        ("Q3_K_M", "q3_rate", TYPE_COLORS["Q3_K"]),
+        ("Q4_K_M", "q4_rate", TYPE_COLORS["Q4_K"]),
+        ("Q5_K_M", "q5_rate", TYPE_COLORS["Q5_K"]),
+    ]
+    deltas = np.array(
+        [
+            [
+                float(row.get("q3_delta_vs_bf16", 0.0)) * 100,
+                float(row.get("q4_delta_vs_bf16", 0.0)) * 100,
+                float(row.get("q5_delta_vs_bf16", 0.0)) * 100,
+            ]
+            for row in benchmarks
+        ]
+    )
+    display_names = {
+        "mmlu": "MMLU",
+        "mmlu_pro": "MMLU-Pro",
+        "arc": "ARC",
+        "hellaswag": "HellaSwag",
+        "gsm8k": "GSM8K",
+        "math": "MATH",
+        "bbh": "BBH",
+        "gpqa": "GPQA",
+        "truthfulqa": "TruthfulQA",
+        "winogrande": "WinoGrande",
+        "drop": "DROP",
+        "piqa": "PIQA",
+        "commonsenseqa": "CommonSenseQA",
+    }
+    names = [display_names.get(str(row["benchmark"]), str(row["benchmark"]).replace("_", "-")) for row in benchmarks]
+    total_rates = [float(total.get(rate_key, 0.0)) * 100 for _label, rate_key, _color in variants]
+
+    fig = plt.figure(figsize=(8.15, 4.3))
+    gs = fig.add_gridspec(1, 3, width_ratios=[0.9, 1.85, 0.055], wspace=0.48)
+    ax_bar = fig.add_subplot(gs[0, 0])
+    ax_heat = fig.add_subplot(gs[0, 1])
+    cax = fig.add_subplot(gs[0, 2])
+    fig.subplots_adjust(left=0.085, right=0.965, top=0.82, bottom=0.18, wspace=0.48)
+    fig.text(
+        0.085,
+        0.94,
+        "Paired BF16-vs-GGUF quality signal",
+        ha="left",
+        va="top",
+        fontsize=10.7,
+        fontweight="semibold",
+        color=PALETTE["ink"],
+    )
+    fig.text(
+        0.085,
+        0.895,
+        "232 identical pinned prompts, deterministic decoding, local scoring rules. Deltas are percentage points vs BF16.",
+        ha="left",
+        va="top",
+        fontsize=7.0,
+        color=PALETTE["muted"],
+    )
+
+    y = np.arange(len(variants))
+    bars = ax_bar.barh(
+        y,
+        total_rates,
+        color=[color for _label, _key, color in variants],
+        edgecolor=PALETTE["paper"],
+        linewidth=1.0,
+        height=0.58,
+    )
+    for bar, value, (label, _key, color) in zip(bars, total_rates, variants):
+        text_color = PALETTE["paper"] if label in {"Q3_K_M", "Q5_K_M"} else PALETTE["ink"]
+        ax_bar.text(
+            value - 1.4,
+            bar.get_y() + bar.get_height() / 2,
+            f"{value:.1f}%",
+            ha="right",
+            va="center",
+            fontsize=7.0,
+            fontweight="semibold",
+            color=text_color,
+        )
+        if label == "BF16":
+            bar.set_edgecolor(PALETTE["spine"])
+        elif color == TYPE_COLORS["Q4_K"]:
+            bar.set_edgecolor("#5d8aad")
+    ax_bar.set_yticks(y, [label for label, _key, _color in variants])
+    ax_bar.invert_yaxis()
+    ax_bar.set_xlim(0, 75.0)
+    ax_bar.set_xlabel("aggregate pass rate", fontsize=7.2)
+    ax_bar.set_title("Aggregate", loc="left", fontweight="semibold", fontsize=8.8, pad=7)
+    ax_bar.xaxis.set_major_formatter(ticker.PercentFormatter(xmax=100))
+    ax_bar.tick_params(axis="both", labelsize=6.9)
+    ax_bar.grid(True, axis="x", which="major", linestyle="--", linewidth=0.62, alpha=0.55)
+    ax_bar.grid(False, axis="y")
+    ax_bar.spines["top"].set_visible(False)
+    ax_bar.spines["right"].set_visible(False)
+    ax_bar.spines["left"].set_color(PALETTE["spine"])
+    ax_bar.spines["bottom"].set_color(PALETTE["spine"])
+
+    max_abs = max(12.5, float(np.nanmax(np.abs(deltas))) if deltas.size else 12.5)
+    norm = TwoSlopeNorm(vmin=-max_abs, vcenter=0.0, vmax=max_abs)
+    image = ax_heat.imshow(deltas, aspect="auto", cmap=DELTA_CMAP, norm=norm)
+    ax_heat.set_xticks([0, 1, 2], ["Q3_K_M", "Q4_K_M", "Q5_K_M"])
+    ax_heat.set_yticks(np.arange(len(names)), names)
+    ax_heat.tick_params(axis="x", labelrotation=0)
+    ax_heat.tick_params(axis="both", labelsize=6.7, pad=2.2)
+    for row_idx in range(deltas.shape[0]):
+        for col_idx in range(deltas.shape[1]):
+            value = deltas[row_idx, col_idx]
+            color = PALETTE["paper"] if abs(value) >= max_abs * 0.62 else PALETTE["ink"]
+            ax_heat.text(
+                col_idx,
+                row_idx,
+                f"{value:+.1f}",
+                ha="center",
+                va="center",
+                fontsize=6.45,
+                fontweight="semibold",
+                color=color,
+            )
+    ax_heat.grid(False)
+    ax_heat.set_xticks(np.arange(-0.5, 3, 1), minor=True)
+    ax_heat.set_yticks(np.arange(-0.5, len(names), 1), minor=True)
+    ax_heat.grid(which="minor", color=PALETTE["grid"], linewidth=0.62)
+    ax_heat.tick_params(which="minor", bottom=False, left=False)
+    ax_heat.set_xlabel("delta vs BF16 (pp)", fontsize=7.2)
+    ax_heat.set_title("Per-benchmark delta", loc="left", fontweight="semibold", fontsize=8.8, pad=7)
+    for spine in ax_heat.spines.values():
+        spine.set_color(PALETTE["spine"])
+        spine.set_linewidth(0.72)
+    cbar = fig.colorbar(image, cax=cax)
+    cbar.set_label("pp", rotation=90, labelpad=4, fontsize=6.8)
+    cbar.ax.tick_params(labelsize=6.3, colors=PALETTE["muted"], length=2.8)
+    cbar.outline.set_edgecolor(PALETTE["spine"])
+    save_figure(fig, stem, "Paired BF16-vs-GGUF subset: aggregate rates and per-benchmark percentage-point deltas.", tight=False)
+
+
 def figure_links(name: str) -> str:
     return f"![{name}](assets/{name}.png)\n\nVector: [`SVG`](assets/{name}.svg) | [`PDF`](assets/{name}.pdf)"
 
@@ -781,6 +940,8 @@ def write_report_md(
             "## Paired BF16-vs-GGUF Mini-Subset",
             "",
             "The staged repo includes a same-task, same-prompt, deterministic 232-sample practical subset comparing the BF16 sidecar against `Q3_K_M`, `Q4_K_M`, and `Q5_K_M`.",
+            "",
+            figure_links("paired-bf16-quant-delta"),
             "",
             "Files:",
             "",
@@ -871,6 +1032,7 @@ def main() -> int:
     category_tensors = category_tensor_rows(variants)
     official_rows = official_baseline_rows(Path(args.official_baseline) if args.official_baseline else None)
     quant_evals = quant_eval_rows(Path(quant_eval_arg) if quant_eval_arg else None)
+    paired_rows = paired_summary_rows(repo)
 
     write_csv(data_dir / "throughput.csv", bench, ["variant", "test", "tokens_per_second", "throughput_text", "backend", "size"])
     write_csv(
@@ -908,6 +1070,7 @@ def main() -> int:
     plot_tensor_allocation(tensors, assets / "tensor-allocation")
     plot_allocation_policy(category_tensors, assets / "allocation-policy")
     plot_quant_eval(quant_evals, assets / "quant-eval-summary")
+    plot_paired_bf16_quant(paired_rows, assets / "paired-bf16-quant-delta")
     write_report_md(repo, official_rows, quant_evals)
     print(f"wrote publication-grade benchmark report assets under {repo}")
     return 0

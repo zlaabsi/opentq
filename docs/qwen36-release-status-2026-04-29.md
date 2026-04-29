@@ -26,7 +26,7 @@
 - Regenerated local canonical staging at `artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF` with `Q3_K_M`, `Q4_K_M`, and `Q5_K_M`.
 - Uploaded the refreshed canonical staging to `zlaabsi/Qwen3.6-27B-OTQ-GGUF`; remote SHA after Q5 verification: `ff2df91ff002d059a8f6c567d257a23566eac9ae`.
 - Verified the remote now contains `Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf`, `evidence/Q5_K_M/validation.json`, `evidence/Q5_K_M/quality-eval.json`, and `evidence/Q5_K_M/release-eval.json`.
-- Refreshed the HF report assets again after review of the plot semantics, then refreshed `BENCHMARKS.md` with the paired 232-sample BF16-vs-GGUF section; current verified remote SHA is `32ad4aa3d71e4562f7cb1c1a9c91731d7b8b1dfc`.
+- Refreshed the HF report assets again after review of the plot semantics, then refreshed `BENCHMARKS.md` with the paired 232-sample BF16-vs-GGUF section; current verified remote SHA is `b05795784230d3797e9a3906c0cf02fce6451f19`.
 - Re-staged Packed and Metal runtime repos locally. Packed remains `public_release_ready=false`; Metal has TQ3_SB4 validation evidence but remains `public_release_ready=false` pending runtime loader/kernel readiness.
 - Ran the paired BF16 sidecar on Hugging Face Jobs H200 for `Qwen/Qwen3.6-27B`, job `69f22ef7d70108f37ace1773`, and uploaded `runs/69f22ef7d70108f37ace1773/no_think.json` to `zlaabsi/opentq-qwen36-bf16-sidecar`.
 - Ran the matching local GGUF paired mini-subset for `Q3_K_M`, `Q4_K_M`, and `Q5_K_M` under `artifacts/qwen3.6-27b-benchmark-subsets-release-core/`.
@@ -35,6 +35,11 @@
   - BF16 Hugging Face Jobs H200 job `69f235d2d2c8bd8662bd320e`, uploaded to `runs/69f235d2d2c8bd8662bd320e/no_think.json`;
   - matching local stock `llama.cpp`/`llama-server` GGUF runs under `artifacts/qwen3.6-27b-benchmark-subsets-release-core-232/`;
   - paired report under `artifacts/qwen3.6-27b-paired-bf16-quant-report-232/`: BF16 `157/232`, Q3 `154/232`, Q4 `155/232`, Q5 `155/232`.
+- Published reproducibility data:
+  - `zlaabsi/opentq-qwen36-bf16-sidecar` is now public;
+  - `zlaabsi/Qwen3.6-27B-OTQ-GGUF-benchmarks` is public with `data/paired_samples.jsonl`, `data/paired_summary.jsonl`, raw BF16/Q3/Q4/Q5 run JSONs, and report files;
+  - Dataset Viewer exposes `default/train` and the raw files are accessible directly from the Hub.
+- Moved the paired BF16-vs-GGUF quality signal and Allocation Transparency sections near the top of the `zlaabsi/Qwen3.6-27B-OTQ-GGUF` card, immediately after the OpenTQ explanation.
 
 ## Cleanup Decision
 

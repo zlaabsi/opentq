@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import glob
 import json
-import math
 import os
 import shutil
 import subprocess
@@ -16,11 +15,17 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from opentq.hf_gguf_release import sha256_file
-from opentq.hf_release import human_gib, link_file
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from opentq.hf_gguf_release import sha256_file  # noqa: E402
+from opentq.hf_release import human_gib, link_file  # noqa: E402
 
 
 REPO_ID = "zlaabsi/Qwen3.6-27B-OTQ-GGUF"
+BENCHMARK_DATASET_ID = "zlaabsi/Qwen3.6-27B-OTQ-GGUF-benchmarks"
 BASE_MODEL = "Qwen/Qwen3.6-27B"
 DEFAULT_BANNER = Path("docs/assets/qwen36-opentq-hero.png")
 
@@ -80,6 +85,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--link-mode", choices=("hardlink", "copy", "symlink"), default="hardlink")
     parser.add_argument("--banner", default=os.environ.get("OPENTQ_QWEN36_BANNER"))
     parser.add_argument("--practical-report", default="artifacts/qwen3.6-27b-degradation-report-practical/degradation-report.json")
+    parser.add_argument("--paired-report-root", default="artifacts/qwen3.6-27b-paired-bf16-quant-report-232")
     parser.add_argument("--skip-report", action="store_true")
     return parser.parse_args()
 
@@ -471,7 +477,73 @@ def practical_subset_markdown(path: Path) -> str:
     return "\n".join(lines)
 
 
-def readme(records: list[dict[str, Any]], practical_report: Path) -> str:
+def copy_paired_report(source_root: Path, output: Path) -> Path | None:
+    if not source_root.exists():
+        return None
+    benchmarks = output / "benchmarks"
+    benchmarks.mkdir(parents=True, exist_ok=True)
+    copies = {
+        "paired_summary.csv": "paired_bf16_quant_summary.csv",
+        "paired_summary.json": "paired_bf16_quant_summary.json",
+        "README.md": "paired_bf16_quant_report.md",
+    }
+    copied = False
+    for source_name, target_name in copies.items():
+        source = source_root / source_name
+        if not source.exists():
+            continue
+        shutil.copy2(source, benchmarks / target_name)
+        copied = True
+    return benchmarks / "paired_bf16_quant_summary.json" if copied else None
+
+
+def format_rate(passed: int, total: int, rate: float) -> str:
+    return f"{passed}/{total} ({rate * 100:.1f}%)"
+
+
+def format_delta(delta: float) -> str:
+    return f"{delta * 100:+.1f}%"
+
+
+def paired_subset_markdown(path: Path | None) -> str:
+    if not path or not path.exists():
+        return practical_subset_markdown(Path("missing"))
+    payload = load_json(path)
+    lines = [
+        "These are small paired release signals, not full benchmark replacements. They use the same pinned task IDs, prompt format `qwen3-no-think`, deterministic decoding, and local scoring rules for BF16 and the GGUF artifacts.",
+        "",
+        f"BF16 sidecar: Hugging Face Jobs H200 run `{payload.get('bf16_job', 'unknown')}`, model `{BASE_MODEL}`. Reproducibility data is published in [`{BENCHMARK_DATASET_ID}`](https://huggingface.co/datasets/{BENCHMARK_DATASET_ID}).",
+        "",
+        "![Paired BF16 vs GGUF quantization deltas](assets/paired-bf16-quant-delta.png)",
+        "",
+        "| Benchmark | BF16 | Q3_K_M | Delta Q3 | Q4_K_M | Delta Q4 | Q5_K_M | Delta Q5 |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in payload.get("rows", []):
+        benchmark = row["benchmark"]
+        lines.append(
+            f"| `{benchmark}` | "
+            f"{format_rate(int(row['bf16_passed']), int(row['bf16_total']), float(row['bf16_rate']))} | "
+            f"{format_rate(int(row['q3_passed']), int(row['q3_total']), float(row['q3_rate']))} | "
+            f"{format_delta(float(row['q3_delta_vs_bf16']))} | "
+            f"{format_rate(int(row['q4_passed']), int(row['q4_total']), float(row['q4_rate']))} | "
+            f"{format_delta(float(row['q4_delta_vs_bf16']))} | "
+            f"{format_rate(int(row['q5_passed']), int(row['q5_total']), float(row['q5_rate']))} | "
+            f"{format_delta(float(row['q5_delta_vs_bf16']))} |"
+        )
+    lines.extend(
+        [
+            "",
+            "Aggregate deltas on this practical subset are small: Q3 is -1.3 points, Q4 is -0.9 points, and Q5 is -0.9 points vs BF16. Per-benchmark rows still have small-N variance and should not be used as leaderboard claims.",
+            "",
+            "Official Qwen3.6-27B full-harness scores remain the baseline for model capability claims. This table measures same-subset quantization regression only.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def readme(records: list[dict[str, Any]], practical_report: Path, paired_summary: Path | None) -> str:
     file_rows = []
     for record in records:
         variant = record["variant"]
@@ -524,6 +596,10 @@ This is the stock `llama.cpp` release track. OpenTQ chooses the tensor-level all
 
 These builds target MacBook-class Apple Silicon where wall-clock time matters, especially with long prompts, large system messages and agent/tool context. The goal is not to publish another uniform quant; it is to provide a stock-compatible GGUF family where OpenTQ spends precision on the tensors that matter more for local inference.
 
+## What Is OpenTQ?
+
+OpenTQ is an open quantization toolchain for TurboQuant-style low-bit model releases. For this GGUF track, OpenTQ does **not** introduce a custom file format: it audits the model tensor map, assigns standard GGUF tensor types per tensor family, validates the resulting files in stock `llama.cpp`, and publishes the allocation/evaluation evidence next to the model.
+
 | Field | Value |
 | --- | --- |
 | Release track | `Qwen3.6-27B-OTQ-GGUF` |
@@ -532,6 +608,20 @@ These builds target MacBook-class Apple Silicon where wall-clock time matters, e
 | Compatibility boundary | standard GGUF only; no native OpenTQ kernel required |
 | Current public variants | `Q3_K_M` compact, `Q4_K_M` balanced, and `Q5_K_M` quality-first |
 | Validation machine | M1 Max, 8K prefill gate, bounded generation, deterministic release suites |
+
+## Paired BF16-vs-GGUF Quality Signal
+
+{paired_subset_markdown(paired_summary)}
+
+## Allocation Transparency
+
+{md_allocation_summary(records)}
+
+![Tensor allocation](assets/tensor-allocation.png)
+
+![Allocation policy](assets/allocation-policy.png)
+
+The allocation plots show where OpenTQ spends precision. For example, the compact profile pushes bulk MLP tensors lower while preserving attention anchors and output-sensitive tensors at higher precision.
 
 ## Files
 
@@ -661,7 +751,7 @@ The plots compare the quantized OTQ artifacts against each other on measured rel
 
 ## Practical Mini-Subset Quality Signals
 
-{practical_subset_markdown(practical_report)}
+See [Paired BF16-vs-GGUF Quality Signal](#paired-bf16-vs-gguf-quality-signal). The table and chart are placed near the top of this card because they are the main same-subset quantization-regression evidence.
 
 ## Release Evaluation
 
@@ -683,16 +773,6 @@ The plots compare the quantized OTQ artifacts against each other on measured rel
 | OTQ `Q3_K_M` / `Q4_K_M` / `Q5_K_M` runtime | Measured with `llama-bench` on M1 Max |
 | OTQ functional release gates | Measured with deterministic smoke and extended suites |
 | Official benchmark deltas | Not claimed yet; requires running the same tasks/scoring on the GGUF artifacts |
-
-## Allocation Transparency
-
-{md_allocation_summary(records)}
-
-![Tensor allocation](assets/tensor-allocation.png)
-
-![Allocation policy](assets/allocation-policy.png)
-
-The allocation plots show where OpenTQ spends precision. For example, the compact profile pushes bulk MLP tensors lower while preserving attention anchors and output-sensitive tensors at higher precision.
 
 ## Transparency Files
 
@@ -898,8 +978,9 @@ def main() -> int:
         shutil.copy2(banner_source, banner_output)
     else:
         make_banner(banner_output)
+    paired_summary = copy_paired_report(Path(args.paired_report_root), output)
     practical_report = Path(args.practical_report)
-    (output / "README.md").write_text(readme(records, practical_report), encoding="utf-8")
+    (output / "README.md").write_text(readme(records, practical_report, paired_summary), encoding="utf-8")
     (output / "USAGE.md").write_text(usage_md(), encoding="utf-8")
     (output / "BENCHMARKS.md").write_text(benchmarks_md(records, practical_report), encoding="utf-8")
     (output / "RELEASE_NOTES.md").write_text(release_notes(records), encoding="utf-8")
