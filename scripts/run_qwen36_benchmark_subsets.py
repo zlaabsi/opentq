@@ -24,11 +24,12 @@ import requests
 SCHEMA = "opentq.qwen36_benchmark_subset_eval.v1"
 DATASET_VIEWER = "https://datasets-server.huggingface.co"
 HF_DATASETS_RESOLVE = "https://huggingface.co/datasets"
-DATASET_VIEWER_RETRIES = 5
+DATASET_VIEWER_RETRIES = 8
 DATASET_VIEWER_RETRY_STATUSES = {429, 500, 502, 503, 504}
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 EXTERNAL_HARNESS_SCORING_RULES = {"swe_bench_verified_harness"}
 OVERSIZED_LOCAL_MODEL_RAM_FRACTION = 0.9
+FETCH_ROW_CACHE: dict[tuple[str, str], dict[str, Any]] = {}
 
 MODEL_PATHS = {
     "q3": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf"),
@@ -535,14 +536,14 @@ def fetch_dataset_viewer_row(adapter: BenchmarkAdapter, task_id: str) -> dict[st
         try:
             response = requests.get(f"{DATASET_VIEWER}/rows", params=params, timeout=60)
             if response.status_code in DATASET_VIEWER_RETRY_STATUSES and attempt < DATASET_VIEWER_RETRIES:
-                time.sleep(min(2 ** (attempt - 1), 8))
+                time.sleep(min(2**attempt, 45))
                 continue
             response.raise_for_status()
             break
         except requests.RequestException:
             if attempt >= DATASET_VIEWER_RETRIES:
                 raise
-            time.sleep(min(2 ** (attempt - 1), 8))
+            time.sleep(min(2**attempt, 45))
     if response is None:
         raise RuntimeError("dataset viewer request did not return a response")
     rows = response.json().get("rows", [])
@@ -583,11 +584,18 @@ def fetch_hf_raw_jsonl_row(adapter: BenchmarkAdapter, task_id: str) -> dict[str,
 
 
 def fetch_row(adapter: BenchmarkAdapter, task_id: str) -> dict[str, Any]:
+    cache_key = (adapter.benchmark_id, task_id)
+    cached = FETCH_ROW_CACHE.get(cache_key)
+    if cached is not None:
+        return dict(cached)
     if adapter.backend == "hf_raw_jsonl":
-        return fetch_hf_raw_jsonl_row(adapter, task_id)
-    if adapter.backend == "datasets_library":
-        return fetch_datasets_library_row(adapter, task_id)
-    return fetch_dataset_viewer_row(adapter, task_id)
+        row = fetch_hf_raw_jsonl_row(adapter, task_id)
+    elif adapter.backend == "datasets_library":
+        row = fetch_datasets_library_row(adapter, task_id)
+    else:
+        row = fetch_dataset_viewer_row(adapter, task_id)
+    FETCH_ROW_CACHE[cache_key] = row
+    return dict(row)
 
 
 def format_qwen_prompt(prompt: str, prompt_format: str) -> str:

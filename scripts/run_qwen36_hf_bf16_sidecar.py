@@ -34,6 +34,8 @@ DEFAULT_REPO_URL = "https://github.com/zlaabsi/opentq.git"
 DEFAULT_REPO_REF = "main"
 DEFAULT_UPLOAD_REPO = "zlaabsi/opentq-qwen36-bf16-sidecar"
 DATASET_VIEWER = "https://datasets-server.huggingface.co"
+DATASET_VIEWER_RETRIES = 8
+DATASET_VIEWER_RETRY_STATUSES = {429, 500, 502, 503, 504}
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 BEGIN_MARKER = "BEGIN_OPENTQ_QWEN36_BF16_SIDECAR_JSON"
 END_MARKER = "END_OPENTQ_QWEN36_BF16_SIDECAR_JSON"
@@ -118,6 +120,11 @@ def extract_boxed_answer(text: str) -> str:
     return match.group(1).strip() if match else text.strip()
 
 
+def extract_hash_answer(answer: str) -> str:
+    match = re.search(r"####\s*([-+]?\d+(?:\.\d+)?)", answer)
+    return match.group(1) if match else answer.strip()
+
+
 def clean_generated_text(output: str) -> str:
     cleaned = output.strip()
     while cleaned.endswith("[end of text]"):
@@ -154,6 +161,17 @@ def extract_number(output: str) -> str | None:
 
 def embedded_adapters() -> dict[str, EmbeddedBenchmarkAdapter]:
     return {
+        "mmlu": EmbeddedBenchmarkAdapter(
+            "mmlu",
+            dataset="cais/mmlu",
+            config="all",
+            split="test",
+            revision="c30699e8356da336a370243923dbaf21066bb9fe",
+            task_ids=spread_offsets(total=14042, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
         "mmlu_pro": EmbeddedBenchmarkAdapter(
             "mmlu_pro",
             dataset="TIGER-Lab/MMLU-Pro",
@@ -165,6 +183,50 @@ def embedded_adapters() -> dict[str, EmbeddedBenchmarkAdapter]:
             scoring_rule="multiple_choice_letter",
             max_tokens=16,
         ),
+        "arc": EmbeddedBenchmarkAdapter(
+            "arc",
+            dataset="allenai/ai2_arc",
+            config="ARC-Challenge",
+            split="validation",
+            revision="210d026faf9955653af8916fad021475a3f00453",
+            task_ids=spread_offsets(total=299, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
+        "hellaswag": EmbeddedBenchmarkAdapter(
+            "hellaswag",
+            dataset="Rowan/hellaswag",
+            config="default",
+            split="validation",
+            revision="218ec52e09a7e7462a5400043bb9a69a41d06b76",
+            task_ids=spread_offsets(total=10042, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
+        "gsm8k": EmbeddedBenchmarkAdapter(
+            "gsm8k",
+            dataset="openai/gsm8k",
+            config="main",
+            split="test",
+            revision="740312add88f781978c0658806c59bc2815b9866",
+            task_ids=spread_offsets(total=1319, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="numeric_exact",
+            max_tokens=1024,
+        ),
+        "math": EmbeddedBenchmarkAdapter(
+            "math",
+            dataset="EleutherAI/hendrycks_math",
+            config="algebra",
+            split="test",
+            revision="21a5633873b6a120296cce3e2df9d5550074f4a3",
+            task_ids=spread_offsets(total=1187, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="math_boxed_exact",
+            max_tokens=2048,
+        ),
         "gpqa": EmbeddedBenchmarkAdapter(
             "gpqa",
             dataset="hendrydong/gpqa_diamond_mc",
@@ -172,6 +234,72 @@ def embedded_adapters() -> dict[str, EmbeddedBenchmarkAdapter]:
             split="test",
             revision="284143babc24a94fbac45d143333b2307e64ff80",
             task_ids=spread_offsets(total=198, count=24),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
+        "bbh": EmbeddedBenchmarkAdapter(
+            "bbh",
+            dataset="lukaemon/bbh",
+            config="boolean_expressions",
+            split="test",
+            revision="982bb89fd79532a8ac676a61fc42eb1aeec63f99",
+            task_ids=spread_offsets(total=250, count=24),
+            prompt_format="qwen3-no-think",
+            scoring_rule="exact_text",
+            max_tokens=32,
+        ),
+        "truthfulqa": EmbeddedBenchmarkAdapter(
+            "truthfulqa",
+            dataset="truthfulqa/truthful_qa",
+            config="multiple_choice",
+            split="validation",
+            revision="741b8276f2d1982aa3d5b832d3ee81ed3b896490",
+            task_ids=spread_offsets(total=817, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
+        "winogrande": EmbeddedBenchmarkAdapter(
+            "winogrande",
+            dataset="allenai/winogrande",
+            config="winogrande_debiased",
+            split="validation",
+            revision="01e74176c63542e6b0bcb004dcdea22d94fb67b5",
+            task_ids=spread_offsets(total=1267, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
+        "drop": EmbeddedBenchmarkAdapter(
+            "drop",
+            dataset="ucinlp/drop",
+            config="default",
+            split="validation",
+            revision="95cda593fae71b60b5b19f82de3fcf3298c1239c",
+            task_ids=spread_offsets(total=9535, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="contains_any",
+            max_tokens=256,
+        ),
+        "piqa": EmbeddedBenchmarkAdapter(
+            "piqa",
+            dataset="lighteval/piqa",
+            config="plain_text",
+            split="validation",
+            revision="41782e6bf0ef7de82a2ca8a9feb1dca042837fae",
+            task_ids=spread_offsets(total=1838, count=16),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
+        "commonsenseqa": EmbeddedBenchmarkAdapter(
+            "commonsenseqa",
+            dataset="tau/commonsense_qa",
+            config="default",
+            split="validation",
+            revision="94630fe30dad47192a8546eb75f094926d47e155",
+            task_ids=spread_offsets(total=1221, count=16),
             prompt_format="qwen3-no-think",
             scoring_rule="multiple_choice_letter",
             max_tokens=16,
@@ -195,27 +323,38 @@ class EmbeddedSmokeRunner:
 
     def __init__(self) -> None:
         self.ADAPTERS = embedded_adapters()
+        self._row_cache: dict[tuple[str, str], dict[str, Any]] = {}
 
     def fetch_row(self, adapter: EmbeddedBenchmarkAdapter, task_id: str) -> dict[str, Any]:
         import requests
 
-        response = requests.get(
-            f"{DATASET_VIEWER}/rows",
-            params={
-                "dataset": adapter.dataset,
-                "config": adapter.config,
-                "split": adapter.split,
-                "revision": adapter.revision,
-                "offset": parse_task_offset(task_id),
-                "length": 1,
-            },
-            timeout=60,
-        )
+        cache_key = (adapter.benchmark_id, task_id)
+        cached = self._row_cache.get(cache_key)
+        if cached is not None:
+            return dict(cached)
+        params = {
+            "dataset": adapter.dataset,
+            "config": adapter.config,
+            "split": adapter.split,
+            "revision": adapter.revision,
+            "offset": parse_task_offset(task_id),
+            "length": 1,
+        }
+        response = None
+        for attempt in range(1, DATASET_VIEWER_RETRIES + 1):
+            response = requests.get(f"{DATASET_VIEWER}/rows", params=params, timeout=60)
+            if response.status_code not in DATASET_VIEWER_RETRY_STATUSES:
+                break
+            if attempt < DATASET_VIEWER_RETRIES:
+                time.sleep(min(45, 2**attempt))
+        assert response is not None
         response.raise_for_status()
         rows = response.json().get("rows", [])
         if not rows:
             raise ValueError(f"no row returned for {adapter.benchmark_id} {task_id}")
-        return dict(rows[0]["row"])
+        row = dict(rows[0]["row"])
+        self._row_cache[cache_key] = row
+        return dict(row)
 
     def build_sample_from_row(self, adapter: EmbeddedBenchmarkAdapter, task_id: str, row: dict[str, Any]) -> dict[str, Any]:
         sample = {
@@ -237,11 +376,75 @@ class EmbeddedSmokeRunner:
                 category=row.get("category"),
             )
             return sample
+        if adapter.benchmark_id == "mmlu":
+            choices = [str(item) for item in row["choices"]]
+            sample.update(
+                prompt=multiple_choice_prompt(str(row["question"]), choices),
+                answer=letter_for_index(int(row["answer"])),
+                category=row.get("subject"),
+            )
+            return sample
+        if adapter.benchmark_id == "arc":
+            choices = [str(item) for item in row["choices"]["text"]]
+            labels = [str(item) for item in row["choices"]["label"]]
+            sample.update(prompt=multiple_choice_prompt(str(row["question"]), choices, labels), answer=str(row["answerKey"]))
+            return sample
+        if adapter.benchmark_id == "hellaswag":
+            sample.update(
+                prompt=multiple_choice_prompt(str(row["ctx"]), [str(item) for item in row["endings"]]),
+                answer=letter_for_index(int(row["label"])),
+            )
+            return sample
+        if adapter.benchmark_id == "gsm8k":
+            sample.update(
+                prompt=f"{row['question']}\n\nReturn only the final numeric answer.",
+                answer=extract_hash_answer(str(row["answer"])),
+            )
+            return sample
+        if adapter.benchmark_id == "math":
+            sample.update(
+                prompt=f"{row['problem']}\n\nReturn only the final answer.",
+                answer=extract_boxed_answer(str(row["solution"])),
+                category=row.get("type"),
+            )
+            return sample
+        if adapter.benchmark_id == "bbh":
+            sample.update(prompt=f"{row['input']}\n\nReturn only the answer.", answer=str(row["target"]))
+            return sample
         if adapter.benchmark_id == "gpqa":
             sample.update(
                 prompt=str(row["problem"]),
                 answer=extract_boxed_answer(str(row["solution"])).replace("\\boxed{", "").replace("}", ""),
             )
+            return sample
+        if adapter.benchmark_id == "truthfulqa":
+            choices = [str(item) for item in row["mc1_targets"]["choices"]]
+            labels = [int(item) for item in row["mc1_targets"]["labels"]]
+            sample.update(prompt=multiple_choice_prompt(str(row["question"]), choices), answer=letter_for_index(labels.index(1)))
+            return sample
+        if adapter.benchmark_id == "winogrande":
+            question = str(row["sentence"]).replace("_", "____")
+            sample.update(
+                prompt=multiple_choice_prompt(question, [str(row["option1"]), str(row["option2"])]),
+                answer=letter_for_index(int(row["answer"]) - 1),
+            )
+            return sample
+        if adapter.benchmark_id == "drop":
+            sample.update(
+                prompt=f"{row['passage']}\n\nQuestion: {row['question']}\n\nReturn only the answer.",
+                answer=[str(item) for item in row["answers_spans"]["spans"]],
+            )
+            return sample
+        if adapter.benchmark_id == "piqa":
+            sample.update(
+                prompt=multiple_choice_prompt(str(row["goal"]), [str(row["sol1"]), str(row["sol2"])]),
+                answer=letter_for_index(int(row["label"])),
+            )
+            return sample
+        if adapter.benchmark_id == "commonsenseqa":
+            choices = [str(item) for item in row["choices"]["text"]]
+            labels = [str(item) for item in row["choices"]["label"]]
+            sample.update(prompt=multiple_choice_prompt(str(row["question"]), choices, labels), answer=str(row["answerKey"]))
             return sample
         if adapter.benchmark_id == "aime":
             sample.update(prompt=f"{row['problem']}\n\nReturn only the final integer answer.", answer=str(row["answer"]))
@@ -266,12 +469,22 @@ class EmbeddedSmokeRunner:
         if sample["scoring_rule"] == "multiple_choice_letter":
             actual = extract_multiple_choice_letter(output)
             return {"passed": actual == expected, "expected": expected, "actual": actual}
-        if sample["scoring_rule"] == "numeric_exact":
+        if sample["scoring_rule"] in {"numeric_exact", "math_boxed_exact"}:
             final_text = final_answer_text(output)
             actual = extract_boxed_answer(final_text)
             if actual == final_text:
                 actual = extract_number(output) or actual
             return {"passed": str(actual).strip() == str(expected).strip(), "expected": expected, "actual": actual}
+        if sample["scoring_rule"] == "exact_text":
+            actual = final_answer_text(output)
+            return {"passed": actual.lower() == str(expected).lower(), "expected": expected, "actual": actual}
+        if sample["scoring_rule"] == "contains_any":
+            actual = final_answer_text(output).lower()
+            expected_values = expected if isinstance(expected, list) else [expected]
+            return {
+                "passed": any(str(item).lower() in actual for item in expected_values),
+                "expected": expected_values,
+            }
         raise ValueError(f"unsupported embedded scoring rule: {sample['scoring_rule']}")
 
     def summarize_results(self, results: list[dict[str, Any]]) -> dict[str, Any]:
@@ -609,6 +822,20 @@ def main() -> int:
         ),
         flush=True,
     )
+    if isinstance(runner, EmbeddedSmokeRunner):
+        for mode in modes:
+            sample_count = len(collect_samples(runner, adapters, mode))
+            print(
+                json.dumps(
+                    {
+                        "event": "sidecar_prefetch_complete",
+                        "mode": mode.name,
+                        "sample_count": sample_count,
+                    },
+                    sort_keys=True,
+                ),
+                flush=True,
+            )
     tokenizer, model, load_seconds = load_bf16_model(args.model_id, args.model_revision)
     payloads = {
         mode.name: run_mode(

@@ -22,7 +22,7 @@ The tradeoff is clear:
 | `OTQ-DYN-Q5_K_M` | `Q5_K_M` | quality-first stock-GGUF baseline | Q5 bulk MLP, Q6/Q8 attention and anchors |
 | `OTQ-DYN-IQ4_NL` | `IQ4_NL` | calibrated nonlinear 4-bit experiment | IQ4_NL bulk MLP, Q5/Q6/Q8 anchors; imatrix required |
 
-`Q5_K_M` is a future quality-first stock GGUF candidate after disk cleanup and runtime gates.
+`Q5_K_M` is the quality-first stock GGUF candidate and has passed the local release gates for the Qwen3.6-27B GGUF track.
 `IQ4_NL is a stock llama.cpp nonlinear 4-bit quant type`, reported by llama.cpp as roughly 4.5 bpw. In OpenTQ release planning it is a deferred experiment because it requires an imatrix before release consideration.
 
 Each profile also promotes first/last layers and periodic attention anchors. That is the current OpenTQ dynamic policy. Later calibration can replace these heuristics with measured KLD/per-layer sensitivity.

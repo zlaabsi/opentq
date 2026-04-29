@@ -27,6 +27,9 @@
 - Uploaded the refreshed canonical staging to `zlaabsi/Qwen3.6-27B-OTQ-GGUF`; remote SHA after verification: `ff2df91ff002d059a8f6c567d257a23566eac9ae`.
 - Verified the remote now contains `Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf`, `evidence/Q5_K_M/validation.json`, `evidence/Q5_K_M/quality-eval.json`, and `evidence/Q5_K_M/release-eval.json`.
 - Re-staged Packed and Metal runtime repos locally. Packed remains `public_release_ready=false`; Metal has TQ3_SB4 validation evidence but remains `public_release_ready=false` pending runtime loader/kernel readiness.
+- Ran the paired BF16 sidecar on Hugging Face Jobs H200 for `Qwen/Qwen3.6-27B`, job `69f22ef7d70108f37ace1773`, and uploaded `runs/69f22ef7d70108f37ace1773/no_think.json` to `zlaabsi/opentq-qwen36-bf16-sidecar`.
+- Ran the matching local GGUF paired mini-subset for `Q3_K_M`, `Q4_K_M`, and `Q5_K_M` under `artifacts/qwen3.6-27b-benchmark-subsets-release-core/`.
+- Generated the paired BF16-vs-GGUF report under `artifacts/qwen3.6-27b-paired-bf16-quant-report/`: BF16 `40/52`, Q3 `41/52`, Q4 `39/52`, Q5 `41/52` on the same pinned no-think mini-subset.
 
 ## Cleanup Decision
 
@@ -58,4 +61,4 @@ The decision is documented in `docs/qwen36-disk-cleanup-arbitrage.md`.
 
 ## Public Claim Boundary
 
-The HF card may claim stock GGUF usability, M1 Max measured runtime gates, Q5 local validation once uploaded, and practical OTQ mini-subset scores. It must not claim full benchmark parity or BF16 degradation unless the matching benchmark setup is run.
+The HF card may claim stock GGUF usability, M1 Max measured runtime gates, Q5 local validation, and paired practical no-think mini-subset deltas. It must not present the 52-sample sidecar as a full official benchmark replacement or compare its MMLU-Pro/GPQA percentages directly to Qwen's full-harness official scores.

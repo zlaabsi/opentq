@@ -67,5 +67,5 @@ Baseline data lives in `benchmarks/qwen36_official_language_baseline.json`. See 
 
 ## Future Stock GGUF Candidates
 
-- `Q5_K_M`: future quality-first stock GGUF candidate after disk cleanup and runtime gates.
+- `Q5_K_M`: quality-first stock GGUF candidate; generated, validated, and published after disk cleanup/runtime gates.
 - `IQ4_NL`: deferred stock llama.cpp nonlinear 4-bit experiment; do not publish without imatrix evidence.
