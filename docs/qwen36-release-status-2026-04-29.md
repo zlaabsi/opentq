@@ -20,6 +20,8 @@
   - quality eval: `5/5`;
   - release extended eval: `10/10`.
 - Regenerated local canonical staging at `artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF` with `Q3_K_M`, `Q4_K_M`, and `Q5_K_M`.
+- Uploaded the refreshed canonical staging to `zlaabsi/Qwen3.6-27B-OTQ-GGUF`; remote SHA after verification: `ff2df91ff002d059a8f6c567d257a23566eac9ae`.
+- Verified the remote now contains `Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf`, `evidence/Q5_K_M/validation.json`, `evidence/Q5_K_M/quality-eval.json`, and `evidence/Q5_K_M/release-eval.json`.
 
 ## Cleanup Decision
 
@@ -41,7 +43,7 @@ The decision is documented in `docs/qwen36-disk-cleanup-arbitrage.md`.
 
 ## Still Gated
 
-- Q5 HF publication: local staging is ready, but the 20 GiB upload is still gated on `HF_UPLOAD=1` or a direct upload instruction.
+- Q5 HF publication: complete and verified on `zlaabsi/Qwen3.6-27B-OTQ-GGUF`.
 - SWE-bench and LiveCodeBench: require real harness adapters.
 - MT-Bench, Chatbot Arena style, AlpacaEval: require a pinned judge setup.
 - MMMU and MathVista: blocked for the current text-only GGUF track.

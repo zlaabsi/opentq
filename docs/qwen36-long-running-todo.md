@@ -8,7 +8,7 @@ This is the operational checklist for the Qwen3.6-27B release/evaluation run. Th
 - Public stock GGUF files should stay named with `OTQ-DYN` plus stock quant tokens, for example `Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf`.
 - Native technical variants stay `TQ*` internally and can be publicly namespaced as `OTQ-TQ*` when released.
 - `Q3_K_M`, `Q4_K_M`, and `Q5_K_M` are the current validated stock GGUF targets.
-- `Q5_K_M` has local release evidence on M1 Max 32 GB, but it is staged only; do not upload the 20 GiB file without `HF_UPLOAD=1` or a direct upload instruction.
+- `Q5_K_M` has local release evidence on M1 Max 32 GB and is now public on `zlaabsi/Qwen3.6-27B-OTQ-GGUF`.
 - `IQ4_NL` is a stock llama.cpp nonlinear 4-bit experiment and requires imatrix evidence before publication.
 - Packed and Metal tracks are separate from stock llama.cpp GGUF and must stay gated until public runtime evidence exists.
 - Disk cleanup deleted only regenerable Hugging Face caches. Local BF16 GGUF source and release artifacts were preserved.
@@ -32,7 +32,7 @@ This is the operational checklist for the Qwen3.6-27B release/evaluation run. Th
 - [x] Phase 4b: Run quick OTQ benchmark subsets for Q3 and Q4 across the requested benchmark families.
 - [x] Phase 5a: Add degradation report builder with no-fake-delta gates.
 - [x] Phase 5b: Produce final degradation report after Q3/Q4 subset JSONs exist.
-- [x] Phase 6: Generate and validate Q5_K_M now that free disk is at the threshold; keep HF upload gated until explicitly enabled.
+- [x] Phase 6: Generate, validate, stage, and publish Q5_K_M after direct upload instruction.
 - [ ] Phase 7: Re-stage and gate `Qwen3.6-27B-OTQ-Packed`; upload only with `HF_UPLOAD=1` and runtime evidence.
 - [ ] Phase 8: Re-stage and gate `Qwen3.6-27B-OTQ-Metal-GGUF`; upload only with `HF_UPLOAD=1` and runtime evidence.
 - [x] Phase 9: Build cleanup manifest and delete only approved regenerable cache paths.
