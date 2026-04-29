@@ -55,7 +55,8 @@ init_summary() {
 
 session_running() {
   session="$1"
-  screen -list 2>/dev/null | grep -q "[.]$session"
+  screen -list >"$RUN_ROOT/screen-wait.list" 2>/dev/null || true
+  grep -q "[.]$session" "$RUN_ROOT/screen-wait.list"
 }
 
 wait_for_sessions() {
