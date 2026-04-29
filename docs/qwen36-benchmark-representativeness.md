@@ -22,6 +22,8 @@ The previous practical report is a smoke signal, not a representative quality cl
 
 ## Launch
 
+Representative local run:
+
 ```bash
 cd /Users/zlaabsi/Documents/GitHub/opentq
 ./scripts/launch_qwen36_representative_benchmarks.sh
@@ -45,4 +47,33 @@ The result is a local report under:
 
 ```text
 artifacts/qwen3.6-27b-representative-benchmarks/<timestamp>/degradation-report/degradation-report.md
+```
+
+Publication-candidate run:
+
+```bash
+cd /Users/zlaabsi/Documents/GitHub/opentq
+./scripts/launch_qwen36_publication_candidate_benchmarks.sh
+```
+
+Defaults:
+
+- waits for `opentq_qwen36_representative` to finish before starting heavy work;
+- models: `q3,q4,q5`;
+- samples per selected benchmark: up to `24`, capped by the adapter task list;
+- token policy: adapter-native max tokens, no global `1024` cap;
+- includes HumanEval, MBPP, and LiveCodeBench v6;
+- generates SWE-bench patch evidence separately with no public pass/fail claim.
+
+Monitor:
+
+```bash
+screen -r opentq_qwen36_publication_candidate
+tail -f artifacts/qwen3.6-27b-publication-candidate-benchmarks/*/publication-candidate.log
+```
+
+The result is a local report under:
+
+```text
+artifacts/qwen3.6-27b-publication-candidate-benchmarks/<timestamp>/degradation-report/degradation-report.md
 ```
