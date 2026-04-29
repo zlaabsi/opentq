@@ -760,6 +760,9 @@ def write_report_md(
     official_rows: list[dict[str, Any]],
     quant_evals: list[dict[str, Any]],
 ) -> None:
+    paired_csv = repo / "benchmarks" / "paired_bf16_quant_summary.csv"
+    paired_json = repo / "benchmarks" / "paired_bf16_quant_summary.json"
+    has_paired = paired_csv.exists() and paired_json.exists()
     official_note = (
         "Official Qwen3.6-27B language benchmark scores are imported as an external reference table in `benchmarks/official_qwen36_baseline.csv`. They are not plotted against OTQ until matching benchmark tasks are run on these GGUF files."
         if official_rows
@@ -768,8 +771,46 @@ def write_report_md(
     quant_note = (
         "OTQ-only comparison JSONs are available in `benchmarks/quant_eval.csv`."
         if quant_evals
+        else "No separate OTQ-only benchmark subset is attached beyond the paired BF16-vs-GGUF mini-subset."
+        if has_paired
         else "No additional OTQ benchmark subset is attached yet. Add OTQ-only task runs when comparing against official benchmark families."
     )
+    paired_note = (
+        [
+            "",
+            "## Paired BF16-vs-GGUF Mini-Subset",
+            "",
+            "The staged repo includes a same-task, same-prompt, deterministic 232-sample practical subset comparing the BF16 sidecar against `Q3_K_M`, `Q4_K_M`, and `Q5_K_M`.",
+            "",
+            "Files:",
+            "",
+            "- `benchmarks/paired_bf16_quant_summary.csv`",
+            "- `benchmarks/paired_bf16_quant_summary.json`",
+            "- `benchmarks/paired_bf16_quant_report.md`",
+            "",
+            "This is a quantization-regression signal, not a full official benchmark replacement. Do not compare its small-subset `mmlu_pro` or `gpqa` rates directly to the Qwen model-card full-harness scores.",
+        ]
+        if has_paired
+        else []
+    )
+    csv_rows = [
+        "- `benchmarks/throughput.csv`",
+        "- `benchmarks/eval_summary.csv`",
+        "- `benchmarks/category_pass_rate.csv`",
+        "- `benchmarks/artifacts.csv`",
+        "- `benchmarks/tensor_allocation.csv`",
+        "- `benchmarks/category_tensor_allocation.csv`",
+        "- `benchmarks/official_qwen36_baseline.csv`",
+    ]
+    if has_paired:
+        csv_rows.extend(
+            [
+                "- `benchmarks/paired_bf16_quant_summary.csv`",
+                "- `benchmarks/paired_bf16_quant_summary.json`",
+                "- `benchmarks/paired_bf16_quant_report.md`",
+            ]
+        )
+    csv_rows.append("- `benchmarks/quant_eval.csv` when separate OTQ-only task runs are present")
     lines = [
         "# Benchmarks",
         "",
@@ -804,17 +845,11 @@ def write_report_md(
         "## OTQ Task Runs",
         "",
         quant_note,
+        *paired_note,
         "",
         "## CSV Data",
         "",
-        "- `benchmarks/throughput.csv`",
-        "- `benchmarks/eval_summary.csv`",
-        "- `benchmarks/category_pass_rate.csv`",
-        "- `benchmarks/artifacts.csv`",
-        "- `benchmarks/tensor_allocation.csv`",
-        "- `benchmarks/category_tensor_allocation.csv`",
-        "- `benchmarks/official_qwen36_baseline.csv`",
-        "- `benchmarks/quant_eval.csv` when OTQ-only task runs are present",
+        *csv_rows,
     ]
     (repo / "BENCHMARKS.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 

@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,8 +13,13 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from opentq.hf_gguf_release import sha256_file
-from opentq.hf_release import human_gib
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+from opentq.hf_gguf_release import sha256_file  # noqa: E402
+from opentq.hf_release import human_gib  # noqa: E402
 
 
 BASE_MODEL = "Qwen/Qwen3.6-27B"
@@ -358,6 +364,8 @@ def staged_metal_usage(filename: str) -> str:
     return f"""# Usage
 
 This staged repo targets OpenTQ runtime development, not stock GGUF loading.
+
+Candidate file: `{filename}`.
 
 ```bash
 python -m json.tool evidence/TQ3_SB4/Qwen3.6-27B-TQ3_SB4-metal.json | head -80

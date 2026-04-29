@@ -24,8 +24,9 @@
   - quality eval: `5/5`;
   - release extended eval: `10/10`.
 - Regenerated local canonical staging at `artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF` with `Q3_K_M`, `Q4_K_M`, and `Q5_K_M`.
-- Uploaded the refreshed canonical staging to `zlaabsi/Qwen3.6-27B-OTQ-GGUF`; remote SHA after verification: `ff2df91ff002d059a8f6c567d257a23566eac9ae`.
+- Uploaded the refreshed canonical staging to `zlaabsi/Qwen3.6-27B-OTQ-GGUF`; remote SHA after Q5 verification: `ff2df91ff002d059a8f6c567d257a23566eac9ae`.
 - Verified the remote now contains `Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf`, `evidence/Q5_K_M/validation.json`, `evidence/Q5_K_M/quality-eval.json`, and `evidence/Q5_K_M/release-eval.json`.
+- Refreshed the HF report assets again after review of the plot semantics, then refreshed `BENCHMARKS.md` with the paired 232-sample BF16-vs-GGUF section; current verified remote SHA is `32ad4aa3d71e4562f7cb1c1a9c91731d7b8b1dfc`.
 - Re-staged Packed and Metal runtime repos locally. Packed remains `public_release_ready=false`; Metal has TQ3_SB4 validation evidence but remains `public_release_ready=false` pending runtime loader/kernel readiness.
 - Ran the paired BF16 sidecar on Hugging Face Jobs H200 for `Qwen/Qwen3.6-27B`, job `69f22ef7d70108f37ace1773`, and uploaded `runs/69f22ef7d70108f37ace1773/no_think.json` to `zlaabsi/opentq-qwen36-bf16-sidecar`.
 - Ran the matching local GGUF paired mini-subset for `Q3_K_M`, `Q4_K_M`, and `Q5_K_M` under `artifacts/qwen3.6-27b-benchmark-subsets-release-core/`.

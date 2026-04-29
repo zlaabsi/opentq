@@ -25,7 +25,7 @@
 - The local BF16 GGUF source was preserved for Q5/re-quantization.
 - The canonical HF GGUF repo was refreshed and verified remotely. The README contains hardware compatibility and practical mini-subset totals: `Q3_K_M` `39/68`, `Q4_K_M` `39/68`.
 - Local BF16 sidecar remains intentionally skipped on M1 Max 32 GB; use official Qwen baseline unless paid/remote BF16 execution is explicitly approved.
-- `Q5_K_M` was generated locally and passed smoke, quality `5/5`, release extended `10/10`, M1 Max 32 GB bounded generation, and 8K `llama-bench` gates. After direct upload instruction, the canonical HF repo was refreshed with Q5 and verified at remote SHA `ff2df91ff002d059a8f6c567d257a23566eac9ae`.
+- `Q5_K_M` was generated locally and passed smoke, quality `5/5`, release extended `10/10`, M1 Max 32 GB bounded generation, and 8K `llama-bench` gates. After direct upload instruction, the canonical HF repo was refreshed with Q5 and verified at remote SHA `ff2df91ff002d059a8f6c567d257a23566eac9ae`; the later figure-semantics and `BENCHMARKS.md` refresh is verified at remote SHA `32ad4aa3d71e4562f7cb1c1a9c91731d7b8b1dfc`.
 - SWE-bench Verified and LiveCodeBench v6 are now represented in `scripts/run_qwen36_benchmark_subsets.py` with pinned metadata. SWE-bench remains external-harness-only; LiveCodeBench lite v6 uses the pinned raw `test6.jsonl` file and stdin exact scoring over decoded public/private tests.
 - Packed and Metal repos were re-staged locally. Their manifests still mark them `public_release_ready=false`, so they remain intentionally unpublished.
 
@@ -575,7 +575,7 @@ Q5 was added to local canonical HF staging after validation, quality, release, a
 
 ## Phase 7: OTQ-Packed Gate And Upload Staging
 
-- [ ] **Step 7.1: Re-stage runtime repos locally**
+- [x] **Step 7.1: Re-stage runtime repos locally**
 
 Run:
 
@@ -590,7 +590,9 @@ Expected:
 Qwen3.6-27B-OTQ-Packed and Qwen3.6-27B-OTQ-Metal-GGUF staging directories are refreshed.
 ```
 
-- [ ] **Step 7.2: Inspect Packed release status**
+Result: refreshed locally under `artifacts/hf-runtime/` with `scripts/stage_qwen36_otq_runtime_repos.py --output-root artifacts/hf-runtime`.
+
+- [x] **Step 7.2: Inspect Packed release status**
 
 Run:
 
@@ -603,6 +605,8 @@ Expected:
 ```text
 README states the runtime requirements and does not imply stock llama.cpp compatibility.
 ```
+
+Result: `artifacts/hf-runtime/Qwen3.6-27B-OTQ-Packed/opentq-packed-release.json` still has `public_release_ready: false` with reason `requires public OpenTQ loader/runtime and release benchmarks`.
 
 - [ ] **Step 7.3: Upload Packed only when public runtime evidence exists**
 
@@ -622,7 +626,7 @@ Stop if the repo does not yet exist, authentication is missing, or runtime evide
 
 ## Phase 8: OTQ-Metal-GGUF Gate
 
-- [ ] **Step 8.1: Inspect Metal staged repo**
+- [x] **Step 8.1: Inspect Metal staged repo**
 
 Run:
 
@@ -635,6 +639,8 @@ Expected:
 ```text
 README clearly states that stock llama.cpp is not the target runtime.
 ```
+
+Result: `artifacts/hf-runtime/Qwen3.6-27B-OTQ-Metal-GGUF/opentq-metal-gguf-release.json` still has `public_release_ready: false`. `TQ3_SB4` is staged with validation `passed`, while `TQ4_BAL_V2` and `TQ4_SB4` remain blocked.
 
 - [ ] **Step 8.2: Run Metal runtime only when loader/kernels are release-grade**
 
@@ -671,7 +677,7 @@ Stop if authentication is missing or runtime evidence is incomplete.
 
 ## Phase 9: Cleanup Manifest And Disk Reclaim
 
-- [ ] **Step 9.1: Build cleanup manifest**
+- [x] **Step 9.1: Build cleanup manifest**
 
 Run:
 
@@ -686,7 +692,9 @@ Expected:
 Cleanup manifest is written and defaults risky paths to investigate.
 ```
 
-- [ ] **Step 9.2: Inspect cleanup decisions**
+Result: `artifacts/release-audit/qwen36-cleanup-manifest.json` was regenerated.
+
+- [x] **Step 9.2: Inspect cleanup decisions**
 
 Run:
 
@@ -706,6 +714,8 @@ Expected:
 ```text
 Every large path is printed with a decision.
 ```
+
+Result: large artifact roots remain `investigate`; only small regenerable Hugging Face cache paths are classified as `regenerable-cache`. No deletion was run.
 
 - [ ] **Step 9.3: Delete only release-verified paths with explicit opt-in**
 
