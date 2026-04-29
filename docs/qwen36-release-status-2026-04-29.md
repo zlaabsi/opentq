@@ -7,6 +7,7 @@
 - Added the remaining agentic/coding adapters:
   - SWE-bench Verified pinned to `princeton-nlp/SWE-bench_Verified` at `c104f840cc67f8b6eec6f759ebc8b2693d585d4a`, status `requires_external_harness`, no synthetic pass/fail;
   - LiveCodeBench lite v6 pinned to `livecodebench/code_generation_lite` at `0fe84c3912ea0c4d4a78037083943e8f0c4dd505`, raw `test6.jsonl`, stdin exact scoring over public and private tests.
+- Ran a LiveCodeBench v6 smoke on `abc387_b`: Q3 and Q4 both passed `1/1`, each with `43/43` stdin tests checked, under `artifacts/qwen3.6-27b-benchmark-subsets-livecodebench-smoke/`.
 - Ran practical Q3/Q4 mini-subsets: `Q3_K_M` `39/68`, `Q4_K_M` `39/68`.
 - Generated the practical degradation report under `artifacts/qwen3.6-27b-degradation-report-practical/`.
 - Refreshed `zlaabsi/Qwen3.6-27B-OTQ-GGUF` with:

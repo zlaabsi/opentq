@@ -15,6 +15,7 @@ This is the operational checklist for the Qwen3.6-27B release/evaluation run. Th
 - The canonical HF GGUF repo has been refreshed with hardware compatibility and practical mini-subset scores; local staging now includes Q5 evidence.
 - SWE-bench Verified is now pinned as an external-harness adapter; this runner records prompts/patch outputs but refuses synthetic pass/fail.
 - LiveCodeBench lite v6 is now pinned to `test6.jsonl` and has a local stdin exact-match scorer for public and private tests.
+- LiveCodeBench smoke evidence exists for Q3 and Q4 on `abc387_b`: `1/1` each, `43/43` stdin tests checked.
 
 ## Autonomous Rules
 
