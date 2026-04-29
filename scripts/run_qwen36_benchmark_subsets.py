@@ -31,6 +31,7 @@ MODEL_PATHS = {
     "q3": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf"),
     "q4": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf"),
     "q5": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf"),
+    "bf16_gguf": Path("artifacts/qwen3.6-27b-source/Qwen3.6-27B-BF16.gguf"),
     "bf16": Path("Qwen/Qwen3.6-27B"),
 }
 
@@ -41,11 +42,12 @@ class ModelTarget:
     path: Path
 
     def as_payload(self) -> dict[str, Any]:
+        kind = "hf_source" if self.key == "bf16" else "gguf_reference" if self.key == "bf16_gguf" else "gguf"
         return {
             "key": self.key,
             "path": str(self.path),
             "exists": self.path.exists() if self.key != "bf16" else None,
-            "kind": "hf_source" if self.key == "bf16" else "gguf",
+            "kind": kind,
         }
 
 
@@ -590,6 +592,8 @@ def format_qwen_prompt(prompt: str, prompt_format: str) -> str:
         return prompt
     if prompt_format == "qwen3-no-think":
         return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+    if prompt_format == "qwen3-thinking":
+        return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n"
     raise ValueError(f"unsupported prompt_format: {prompt_format}")
 
 
@@ -607,8 +611,18 @@ def clean_generated_text(output: str) -> str:
     return cleaned
 
 
-def extract_python_code(output: str) -> str:
+def final_answer_text(output: str) -> str:
     cleaned = clean_generated_text(output)
+    if "</think>" in cleaned:
+        cleaned = cleaned.rsplit("</think>", 1)[1].strip()
+    for marker in ("<|im_end|>", "<|endoftext|>"):
+        if marker in cleaned:
+            cleaned = cleaned.split(marker, 1)[0].strip()
+    return cleaned
+
+
+def extract_python_code(output: str) -> str:
+    cleaned = final_answer_text(output)
     fenced = re.search(r"```(?:python|py)?\s*(.*?)```", cleaned, flags=re.IGNORECASE | re.DOTALL)
     if fenced:
         return fenced.group(1).strip()
@@ -616,19 +630,19 @@ def extract_python_code(output: str) -> str:
 
 
 def extract_multiple_choice_letter(output: str) -> str | None:
-    cleaned = clean_generated_text(output).upper()
+    cleaned = final_answer_text(output).upper()
     boxed = re.search(r"\\BOXED\{([A-Z])\}", cleaned)
     if boxed:
         return boxed.group(1)
-    parenthesized = re.search(r"\(([A-Z])\)", cleaned)
+    parenthesized = re.findall(r"\(([A-Z])\)", cleaned)
     if parenthesized:
-        return parenthesized.group(1)
-    standalone = re.search(r"\b([A-Z])\b", cleaned)
-    return standalone.group(1) if standalone else None
+        return parenthesized[-1]
+    standalone = re.findall(r"\b([A-Z])\b", cleaned)
+    return standalone[-1] if standalone else None
 
 
 def extract_number(output: str) -> str | None:
-    matches = re.findall(r"[-+]?\d+(?:\.\d+)?", clean_generated_text(output).replace(",", ""))
+    matches = re.findall(r"[-+]?\d+(?:\.\d+)?", final_answer_text(output).replace(",", ""))
     return matches[-1] if matches else None
 
 
@@ -728,15 +742,16 @@ def score_benchmark_output(sample: dict[str, Any], output: str) -> dict[str, Any
         actual = extract_multiple_choice_letter(output)
         return {"passed": actual == expected, "expected": expected, "actual": actual}
     if scoring_rule in {"numeric_exact", "math_boxed_exact"}:
-        actual = extract_boxed_answer(clean_generated_text(output))
-        if actual == clean_generated_text(output):
+        final_text = final_answer_text(output)
+        actual = extract_boxed_answer(final_text)
+        if actual == final_text:
             actual = extract_number(output) or actual
         return {"passed": str(actual).strip() == str(expected).strip(), "expected": expected, "actual": actual}
     if scoring_rule == "exact_text":
-        actual = clean_generated_text(output)
+        actual = final_answer_text(output)
         return {"passed": actual.lower() == str(expected).lower(), "expected": expected, "actual": actual}
     if scoring_rule == "contains_any":
-        actual = clean_generated_text(output).lower()
+        actual = final_answer_text(output).lower()
         expected_values = expected if isinstance(expected, list) else [expected]
         return {"passed": any(str(item).lower() in actual for item in expected_values), "expected": expected_values}
     if scoring_rule == "python_unit_tests":
@@ -879,24 +894,40 @@ def samples_for_adapter(adapter: BenchmarkAdapter, max_samples: int | None = Non
     return samples
 
 
+def apply_generation_overrides(sample: dict[str, Any], max_tokens: int | None, prompt_format: str | None) -> dict[str, Any]:
+    updated = dict(sample)
+    if max_tokens is not None:
+        updated["max_tokens"] = min(int(updated["max_tokens"]), max_tokens)
+    if prompt_format is not None:
+        updated["prompt_format"] = prompt_format
+    return updated
+
+
 def apply_max_tokens(sample: dict[str, Any], max_tokens: int | None) -> dict[str, Any]:
-    if max_tokens is None:
-        return dict(sample)
-    capped = dict(sample)
-    capped["max_tokens"] = min(int(capped["max_tokens"]), max_tokens)
-    return capped
+    return apply_generation_overrides(sample, max_tokens=max_tokens, prompt_format=None)
 
 
-def generation_command(model: ModelTarget, llama_cpp: Path, sample: dict[str, Any], timeout_seconds: int) -> list[str]:
+def generation_command(
+    model: ModelTarget,
+    llama_cpp: Path,
+    sample: dict[str, Any],
+    timeout_seconds: int,
+    temperature: float = 0.0,
+    top_p: float | None = None,
+    top_k: int | None = None,
+    seed: int | None = None,
+    context_size: int = 8192,
+    gpu_layers: int = 99,
+) -> list[str]:
     _ = timeout_seconds
-    return [
+    command = [
         str(generation_binary(llama_cpp)),
         "-m",
         str(model.path),
         "-ngl",
-        "99",
+        str(gpu_layers),
         "-c",
-        "8192",
+        str(context_size),
         "-n",
         str(sample["max_tokens"]),
         "-p",
@@ -910,13 +941,44 @@ def generation_command(model: ModelTarget, llama_cpp: Path, sample: dict[str, An
         "--log-verbosity",
         "1",
         "--temp",
-        "0",
+        str(temperature),
     ]
+    if top_p is not None:
+        command.extend(["--top-p", str(top_p)])
+    if top_k is not None:
+        command.extend(["--top-k", str(top_k)])
+    if seed is not None:
+        command.extend(["--seed", str(seed)])
+    return command
 
 
-def run_generation(model: ModelTarget, llama_cpp: Path, sample: dict[str, Any], timeout_seconds: int) -> dict[str, Any]:
-    command = generation_command(model, llama_cpp, sample, timeout_seconds)
+def run_generation(
+    model: ModelTarget,
+    llama_cpp: Path,
+    sample: dict[str, Any],
+    timeout_seconds: int,
+    temperature: float,
+    top_p: float | None,
+    top_k: int | None,
+    seed: int | None,
+    context_size: int,
+    gpu_layers: int,
+) -> dict[str, Any]:
+    command = generation_command(
+        model,
+        llama_cpp,
+        sample,
+        timeout_seconds,
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        seed=seed,
+        context_size=context_size,
+        gpu_layers=gpu_layers,
+    )
+    started = time.perf_counter()
     completed = subprocess.run(command, text=True, capture_output=True, check=False, timeout=timeout_seconds)
+    elapsed = time.perf_counter() - started
     stdout = completed.stdout.strip()
     score = score_benchmark_output(sample, stdout) if completed.returncode == 0 else {"passed": False, "reason": "runtime_error"}
     return {
@@ -927,6 +989,7 @@ def run_generation(model: ModelTarget, llama_cpp: Path, sample: dict[str, Any], 
         "stderr_tail": completed.stderr[-4000:],
         "score": score,
         "passed": completed.returncode == 0 and bool(score.get("passed")),
+        "elapsed_seconds": round(elapsed, 3),
     }
 
 
@@ -959,6 +1022,13 @@ def run_model_benchmarks(
     max_samples: int | None,
     max_tokens: int | None,
     timeout_seconds: int,
+    prompt_format: str | None,
+    temperature: float,
+    top_p: float | None,
+    top_k: int | None,
+    seed: int | None,
+    context_size: int,
+    gpu_layers: int,
 ) -> dict[str, Any]:
     require_runtime(model, llama_cpp)
     benchmark_payloads = []
@@ -966,13 +1036,40 @@ def run_model_benchmarks(
         "schema": SCHEMA,
         "created_at": now_iso(),
         "model": model.as_payload(),
+        "generation": {
+            "prompt_format_override": prompt_format,
+            "temperature": temperature,
+            "top_p": top_p,
+            "top_k": top_k,
+            "seed": seed,
+            "context_size": context_size,
+            "gpu_layers": gpu_layers,
+            "timeout_seconds": timeout_seconds,
+        },
         "benchmarks": benchmark_payloads,
     }
     output_root.mkdir(parents=True, exist_ok=True)
     target = output_root / f"{model.key}.json"
     for adapter in adapters:
-        samples = [apply_max_tokens(sample, max_tokens) for sample in samples_for_adapter(adapter, max_samples=max_samples)]
-        results = [run_generation(model, llama_cpp, sample, timeout_seconds) for sample in samples]
+        samples = [
+            apply_generation_overrides(sample, max_tokens=max_tokens, prompt_format=prompt_format)
+            for sample in samples_for_adapter(adapter, max_samples=max_samples)
+        ]
+        results = [
+            run_generation(
+                model,
+                llama_cpp,
+                sample,
+                timeout_seconds,
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                seed=seed,
+                context_size=context_size,
+                gpu_layers=gpu_layers,
+            )
+            for sample in samples
+        ]
         benchmark_payloads.append(
             {
                 "benchmark_id": adapter.benchmark_id,
@@ -997,6 +1094,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark-id", action="append", default=[])
     parser.add_argument("--max-samples-per-family", type=int)
     parser.add_argument("--max-tokens", type=int, help="Cap generation tokens per sample for practical local subsets.")
+    parser.add_argument("--prompt-format", choices=("raw", "qwen3-no-think", "qwen3-thinking"), help="Override adapter prompt format.")
+    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--top-p", type=float)
+    parser.add_argument("--top-k", type=int)
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--context-size", type=int, default=8192)
+    parser.add_argument("--gpu-layers", type=int, default=99)
     parser.add_argument("--timeout", type=int, default=600)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--allow-judge", action="store_true")
@@ -1042,6 +1146,13 @@ def main() -> int:
                 max_samples=args.max_samples_per_family,
                 max_tokens=args.max_tokens,
                 timeout_seconds=args.timeout,
+                prompt_format=args.prompt_format,
+                temperature=args.temperature,
+                top_p=args.top_p,
+                top_k=args.top_k,
+                seed=args.seed,
+                context_size=args.context_size,
+                gpu_layers=args.gpu_layers,
             )
     return 0
 

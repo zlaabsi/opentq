@@ -20,6 +20,8 @@ def test_qwen36_overnight_scripts_are_bash_3_compatible() -> None:
         Path("scripts/launch_qwen36_representative_benchmarks.sh"),
         Path("scripts/run_qwen36_publication_candidate_benchmarks.sh"),
         Path("scripts/launch_qwen36_publication_candidate_benchmarks.sh"),
+        Path("scripts/run_qwen36_bf16_paired_quality.sh"),
+        Path("scripts/launch_qwen36_bf16_paired_quality.sh"),
     ]
 
     for script in scripts:

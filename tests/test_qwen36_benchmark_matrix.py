@@ -13,9 +13,12 @@ from scripts.run_qwen36_benchmark_subsets import (
     ADAPTERS,
     MODEL_PATHS,
     build_sample_from_row,
+    apply_generation_overrides,
     apply_max_tokens,
     fetch_dataset_viewer_row,
     fetch_hf_raw_jsonl_row,
+    final_answer_text,
+    format_qwen_prompt,
     generation_binary,
     generation_command,
     ModelTarget,
@@ -203,6 +206,14 @@ def test_benchmark_runner_supports_q5_model_target() -> None:
     assert MODEL_PATHS["q5"].name == "Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf"
 
 
+def test_benchmark_runner_supports_local_bf16_gguf_reference() -> None:
+    targets = parse_models("bf16_gguf,q3")
+
+    assert [target.key for target in targets] == ["bf16_gguf", "q3"]
+    assert targets[0].as_payload()["kind"] == "gguf_reference"
+    assert MODEL_PATHS["bf16_gguf"].name == "Qwen3.6-27B-BF16.gguf"
+
+
 def test_build_sample_from_mmlu_row_pins_task_metadata() -> None:
     sample = build_sample_from_row(
         ADAPTERS["mmlu"],
@@ -294,7 +305,13 @@ def test_score_benchmark_output_handles_multiple_choice_and_numeric_answers() ->
 
     assert score_benchmark_output(mc, "The answer is D.")["passed"] is True
     assert score_benchmark_output(mc, "The answer is A.")["passed"] is False
+    assert score_benchmark_output(mc, "<think>\nMaybe A.\n</think>\nThe answer is D.")["passed"] is True
     assert score_benchmark_output(numeric, "Final answer: 18")["passed"] is True
+
+
+def test_final_answer_text_ignores_qwen_thinking_trace() -> None:
+    assert final_answer_text("<think>\nA tempting wrong answer.\n</think>\nFinal answer: B") == "Final answer: B"
+    assert "<think>" in format_qwen_prompt("Hello", "qwen3-thinking")
 
 
 def test_swe_bench_scoring_refuses_synthetic_pass_fail() -> None:
@@ -350,6 +367,16 @@ def test_apply_max_tokens_caps_long_samples() -> None:
 
     assert capped["max_tokens"] == 512
     assert sample["max_tokens"] == 4096
+
+
+def test_apply_generation_overrides_can_switch_prompt_mode() -> None:
+    sample = {"max_tokens": 4096, "prompt_format": "qwen3-no-think"}
+
+    updated = apply_generation_overrides(sample, max_tokens=1024, prompt_format="qwen3-thinking")
+
+    assert updated["max_tokens"] == 1024
+    assert updated["prompt_format"] == "qwen3-thinking"
+    assert sample["prompt_format"] == "qwen3-no-think"
 
 
 def test_fetch_dataset_viewer_row_retries_transient_errors(monkeypatch) -> None:

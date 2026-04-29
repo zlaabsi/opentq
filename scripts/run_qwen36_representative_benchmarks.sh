@@ -89,7 +89,7 @@ write_benchmark_summary() {
   append_summary "## Results"
   append_summary
   if ls "$RUN_ROOT/subsets"/*.json >/dev/null 2>&1; then
-    jq -r '.model.key as $model | .benchmarks[] | "- `" + $model + "` `" + .benchmark_id + "`: `" + (.summary.passed|tostring) + "/" + (.summary.total|tostring) + "` (` + ((.summary.pass_rate * 10000 | round / 100)|tostring) + "%`)."' "$RUN_ROOT/subsets"/*.json >>"$SUMMARY"
+    jq -r '.model.key as $model | .benchmarks[] | "- " + $model + " " + .benchmark_id + ": " + (.summary.passed|tostring) + "/" + (.summary.total|tostring) + " (" + ((.summary.pass_rate * 10000 | round / 100)|tostring) + "%)."' "$RUN_ROOT/subsets"/*.json >>"$SUMMARY"
   else
     append_summary "- No subset JSONs found."
   fi
