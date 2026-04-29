@@ -30,6 +30,7 @@ EXTERNAL_HARNESS_SCORING_RULES = {"swe_bench_verified_harness"}
 MODEL_PATHS = {
     "q3": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q3_K_M.gguf"),
     "q4": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf"),
+    "q5": Path("artifacts/hf-gguf-canonical/Qwen3.6-27B-OTQ-GGUF/Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf"),
     "bf16": Path("Qwen/Qwen3.6-27B"),
 }
 
@@ -80,6 +81,25 @@ def _offsets(count: int) -> tuple[str, ...]:
     return tuple(f"offset:{offset}" for offset in range(count))
 
 
+def _spread_offsets(total: int, count: int) -> tuple[str, ...]:
+    if total <= 0:
+        raise ValueError("total must be positive")
+    if count <= 0:
+        raise ValueError("count must be positive")
+    if count == 1:
+        return ("offset:0",)
+    selected = []
+    seen = set()
+    target_count = min(total, count)
+    for index in range(target_count):
+        offset = round(index * (total - 1) / (target_count - 1))
+        if offset in seen:
+            continue
+        selected.append(f"offset:{offset}")
+        seen.add(offset)
+    return tuple(selected)
+
+
 ADAPTERS: dict[str, BenchmarkAdapter] = {
     "mmlu": BenchmarkAdapter(
         "mmlu",
@@ -87,7 +107,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="all",
         split="test",
         revision="c30699e8356da336a370243923dbaf21066bb9fe",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=14042, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,
@@ -98,7 +118,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="default",
         split="test",
         revision="54611cde22c74cca43dd78732198de6abe971398",
-        task_ids=_offsets(24),
+        task_ids=_spread_offsets(total=12032, count=24),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,
@@ -109,7 +129,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="ARC-Challenge",
         split="validation",
         revision="210d026faf9955653af8916fad021475a3f00453",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=299, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,
@@ -120,7 +140,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="default",
         split="validation",
         revision="218ec52e09a7e7462a5400043bb9a69a41d06b76",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=10042, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,
@@ -131,7 +151,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="main",
         split="test",
         revision="740312add88f781978c0658806c59bc2815b9866",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=1319, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="numeric_exact",
         max_tokens=1024,
@@ -142,7 +162,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="algebra",
         split="test",
         revision="21a5633873b6a120296cce3e2df9d5550074f4a3",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=1187, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="math_boxed_exact",
         max_tokens=2048,
@@ -153,7 +173,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="default",
         split="train",
         revision="10b4e45b7a503075d4da8a0d57916a4f06ce6bd2",
-        task_ids=_offsets(24),
+        task_ids=_spread_offsets(total=30, count=24),
         prompt_format="qwen3-no-think",
         scoring_rule="numeric_exact",
         max_tokens=4096,
@@ -164,7 +184,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="openai_humaneval",
         split="test",
         revision="7dce6050a7d6d172f3cc5c32aa97f52fa1a2e544",
-        task_ids=_offsets(12),
+        task_ids=_spread_offsets(total=164, count=12),
         prompt_format="qwen3-no-think",
         scoring_rule="python_unit_tests",
         max_tokens=2048,
@@ -175,7 +195,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="sanitized",
         split="test",
         revision="4bb6404fdc6cacfda99d4ac4205087b89d32030c",
-        task_ids=_offsets(12),
+        task_ids=_spread_offsets(total=257, count=12),
         prompt_format="qwen3-no-think",
         scoring_rule="python_unit_tests",
         max_tokens=2048,
@@ -186,7 +206,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="default",
         split="test",
         revision="c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
-        task_ids=_offsets(3),
+        task_ids=_spread_offsets(total=500, count=3),
         prompt_format="qwen3-no-think",
         scoring_rule="swe_bench_verified_harness",
         max_tokens=8192,
@@ -197,7 +217,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="v6",
         split="test",
         revision="0fe84c3912ea0c4d4a78037083943e8f0c4dd505",
-        task_ids=_offsets(12),
+        task_ids=_spread_offsets(total=175, count=12),
         prompt_format="qwen3-no-think",
         scoring_rule="livecodebench_v6_stdin_exact",
         max_tokens=4096,
@@ -209,7 +229,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="boolean_expressions",
         split="test",
         revision="982bb89fd79532a8ac676a61fc42eb1aeec63f99",
-        task_ids=_offsets(24),
+        task_ids=_spread_offsets(total=250, count=24),
         prompt_format="qwen3-no-think",
         scoring_rule="exact_text",
         max_tokens=32,
@@ -220,7 +240,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="default",
         split="test",
         revision="284143babc24a94fbac45d143333b2307e64ff80",
-        task_ids=_offsets(24),
+        task_ids=_spread_offsets(total=198, count=24),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,
@@ -231,7 +251,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="default",
         split="train",
         revision="966cd89545d6b6acfd7638bc708b98261ca58e84",
-        task_ids=_offsets(24),
+        task_ids=_spread_offsets(total=541, count=24),
         prompt_format="qwen3-no-think",
         scoring_rule="ifeval_partial",
         max_tokens=4096,
@@ -242,7 +262,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="multiple_choice",
         split="validation",
         revision="741b8276f2d1982aa3d5b832d3ee81ed3b896490",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=817, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,
@@ -253,7 +273,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="winogrande_debiased",
         split="validation",
         revision="01e74176c63542e6b0bcb004dcdea22d94fb67b5",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=1267, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,
@@ -264,7 +284,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="default",
         split="validation",
         revision="95cda593fae71b60b5b19f82de3fcf3298c1239c",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=9535, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="contains_any",
         max_tokens=256,
@@ -275,7 +295,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="plain_text",
         split="validation",
         revision="41782e6bf0ef7de82a2ca8a9feb1dca042837fae",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=1838, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,
@@ -286,7 +306,7 @@ ADAPTERS: dict[str, BenchmarkAdapter] = {
         config="default",
         split="validation",
         revision="94630fe30dad47192a8546eb75f094926d47e155",
-        task_ids=_offsets(16),
+        task_ids=_spread_offsets(total=1221, count=16),
         prompt_format="qwen3-no-think",
         scoring_rule="multiple_choice_letter",
         max_tokens=16,

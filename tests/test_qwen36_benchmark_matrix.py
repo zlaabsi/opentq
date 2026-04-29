@@ -11,6 +11,7 @@ import requests
 import scripts.run_qwen36_benchmark_subsets as runner
 from scripts.run_qwen36_benchmark_subsets import (
     ADAPTERS,
+    MODEL_PATHS,
     build_sample_from_row,
     apply_max_tokens,
     fetch_dataset_viewer_row,
@@ -19,8 +20,10 @@ from scripts.run_qwen36_benchmark_subsets import (
     generation_command,
     ModelTarget,
     parse_json_list,
+    parse_models,
     run_livecodebench_stdin_tests,
     score_benchmark_output,
+    _spread_offsets,
 )
 
 
@@ -185,6 +188,19 @@ def test_phase4_adapters_are_defined_with_pinned_metadata() -> None:
         assert adapter.task_ids
         assert adapter.prompt_format == "qwen3-no-think"
         assert adapter.scoring_rule
+
+
+def test_task_ids_are_spread_across_pinned_splits_not_first_rows_only() -> None:
+    assert _spread_offsets(total=100, count=5) == ("offset:0", "offset:25", "offset:50", "offset:74", "offset:99")
+    assert ADAPTERS["mmlu"].task_ids[:4] == ("offset:0", "offset:936", "offset:1872", "offset:2808")
+    assert ADAPTERS["livecodebench"].task_ids[:4] == ("offset:0", "offset:16", "offset:32", "offset:47")
+
+
+def test_benchmark_runner_supports_q5_model_target() -> None:
+    targets = parse_models("q3,q4,q5")
+
+    assert [target.key for target in targets] == ["q3", "q4", "q5"]
+    assert MODEL_PATHS["q5"].name == "Qwen3.6-27B-OTQ-DYN-Q5_K_M.gguf"
 
 
 def test_build_sample_from_mmlu_row_pins_task_metadata() -> None:
