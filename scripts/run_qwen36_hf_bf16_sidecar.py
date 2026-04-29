@@ -19,6 +19,7 @@ import argparse
 import importlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -32,6 +33,8 @@ DEFAULT_MODEL_ID = "Qwen/Qwen3.6-27B"
 DEFAULT_REPO_URL = "https://github.com/zlaabsi/opentq.git"
 DEFAULT_REPO_REF = "main"
 DEFAULT_UPLOAD_REPO = "zlaabsi/opentq-qwen36-bf16-sidecar"
+DATASET_VIEWER = "https://datasets-server.huggingface.co"
+LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 BEGIN_MARKER = "BEGIN_OPENTQ_QWEN36_BF16_SIDECAR_JSON"
 END_MARKER = "END_OPENTQ_QWEN36_BF16_SIDECAR_JSON"
 
@@ -45,8 +48,241 @@ class ModeConfig:
     token_policy: str
 
 
+@dataclass(frozen=True)
+class EmbeddedBenchmarkAdapter:
+    benchmark_id: str
+    dataset: str
+    config: str
+    split: str
+    revision: str
+    task_ids: tuple[str, ...]
+    prompt_format: str
+    scoring_rule: str
+    max_tokens: int
+
+    def as_plan_payload(self) -> dict[str, Any]:
+        return {
+            "benchmark_id": self.benchmark_id,
+            "dataset": self.dataset,
+            "config": self.config,
+            "split": self.split,
+            "revision": self.revision,
+            "task_ids": list(self.task_ids),
+            "prompt_format": self.prompt_format,
+            "scoring_rule": self.scoring_rule,
+            "max_tokens": self.max_tokens,
+            "backend": "embedded_dataset_viewer",
+        }
+
+
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def spread_offsets(total: int, count: int) -> tuple[str, ...]:
+    target_count = min(total, count)
+    if target_count == 1:
+        return ("offset:0",)
+    selected = []
+    seen = set()
+    for index in range(target_count):
+        offset = round(index * (total - 1) / (target_count - 1))
+        if offset in seen:
+            continue
+        selected.append(f"offset:{offset}")
+        seen.add(offset)
+    return tuple(selected)
+
+
+def letter_for_index(index: int) -> str:
+    if index < 0 or index >= len(LETTERS):
+        raise ValueError(f"choice index out of range: {index}")
+    return LETTERS[index]
+
+
+def multiple_choice_prompt(question: str, choices: list[str], labels: list[str] | None = None) -> str:
+    if labels is None:
+        labels = [letter_for_index(index) for index in range(len(choices))]
+    rendered = "\n".join(f"({label}) {choice}" for label, choice in zip(labels, choices, strict=True))
+    return f"{question}\n\n{rendered}\n\nReturn only the letter of the correct answer."
+
+
+def parse_task_offset(task_id: str) -> int:
+    if not task_id.startswith("offset:"):
+        raise ValueError(f"unsupported task id {task_id!r}; expected offset:<int>")
+    return int(task_id.split(":", 1)[1])
+
+
+def extract_boxed_answer(text: str) -> str:
+    match = re.search(r"\\boxed\{([^{}]+)\}", text)
+    return match.group(1).strip() if match else text.strip()
+
+
+def clean_generated_text(output: str) -> str:
+    cleaned = output.strip()
+    while cleaned.endswith("[end of text]"):
+        cleaned = cleaned[: -len("[end of text]")].strip()
+    return cleaned
+
+
+def final_answer_text(output: str) -> str:
+    cleaned = clean_generated_text(output)
+    if "</think>" in cleaned:
+        cleaned = cleaned.rsplit("</think>", 1)[1].strip()
+    for marker in ("<|im_end|>", "<|endoftext|>"):
+        if marker in cleaned:
+            cleaned = cleaned.split(marker, 1)[0].strip()
+    return cleaned
+
+
+def extract_multiple_choice_letter(output: str) -> str | None:
+    cleaned = final_answer_text(output).upper()
+    boxed = re.search(r"\\BOXED\{([A-Z])\}", cleaned)
+    if boxed:
+        return boxed.group(1)
+    parenthesized = re.findall(r"\(([A-Z])\)", cleaned)
+    if parenthesized:
+        return parenthesized[-1]
+    standalone = re.findall(r"\b([A-Z])\b", cleaned)
+    return standalone[-1] if standalone else None
+
+
+def extract_number(output: str) -> str | None:
+    matches = re.findall(r"[-+]?\d+(?:\.\d+)?", final_answer_text(output).replace(",", ""))
+    return matches[-1] if matches else None
+
+
+def embedded_adapters() -> dict[str, EmbeddedBenchmarkAdapter]:
+    return {
+        "mmlu_pro": EmbeddedBenchmarkAdapter(
+            "mmlu_pro",
+            dataset="TIGER-Lab/MMLU-Pro",
+            config="default",
+            split="test",
+            revision="54611cde22c74cca43dd78732198de6abe971398",
+            task_ids=spread_offsets(total=12032, count=24),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
+        "gpqa": EmbeddedBenchmarkAdapter(
+            "gpqa",
+            dataset="hendrydong/gpqa_diamond_mc",
+            config="default",
+            split="test",
+            revision="284143babc24a94fbac45d143333b2307e64ff80",
+            task_ids=spread_offsets(total=198, count=24),
+            prompt_format="qwen3-no-think",
+            scoring_rule="multiple_choice_letter",
+            max_tokens=16,
+        ),
+        "aime": EmbeddedBenchmarkAdapter(
+            "aime",
+            dataset="MathArena/aime_2026",
+            config="default",
+            split="train",
+            revision="10b4e45b7a503075d4da8a0d57916a4f06ce6bd2",
+            task_ids=spread_offsets(total=30, count=24),
+            prompt_format="qwen3-no-think",
+            scoring_rule="numeric_exact",
+            max_tokens=4096,
+        ),
+    }
+
+
+class EmbeddedSmokeRunner:
+    SCHEMA = "opentq.qwen36_benchmark_subset_eval.v1"
+
+    def __init__(self) -> None:
+        self.ADAPTERS = embedded_adapters()
+
+    def fetch_row(self, adapter: EmbeddedBenchmarkAdapter, task_id: str) -> dict[str, Any]:
+        import requests
+
+        response = requests.get(
+            f"{DATASET_VIEWER}/rows",
+            params={
+                "dataset": adapter.dataset,
+                "config": adapter.config,
+                "split": adapter.split,
+                "revision": adapter.revision,
+                "offset": parse_task_offset(task_id),
+                "length": 1,
+            },
+            timeout=60,
+        )
+        response.raise_for_status()
+        rows = response.json().get("rows", [])
+        if not rows:
+            raise ValueError(f"no row returned for {adapter.benchmark_id} {task_id}")
+        return dict(rows[0]["row"])
+
+    def build_sample_from_row(self, adapter: EmbeddedBenchmarkAdapter, task_id: str, row: dict[str, Any]) -> dict[str, Any]:
+        sample = {
+            "benchmark_id": adapter.benchmark_id,
+            "task_id": task_id,
+            "dataset": adapter.dataset,
+            "config": adapter.config,
+            "split": adapter.split,
+            "revision": adapter.revision,
+            "prompt_format": adapter.prompt_format,
+            "scoring_rule": adapter.scoring_rule,
+            "max_tokens": adapter.max_tokens,
+        }
+        if adapter.benchmark_id == "mmlu_pro":
+            choices = [str(item) for item in row["options"]]
+            sample.update(
+                prompt=multiple_choice_prompt(str(row["question"]), choices),
+                answer=letter_for_index(int(row["answer_index"])),
+                category=row.get("category"),
+            )
+            return sample
+        if adapter.benchmark_id == "gpqa":
+            sample.update(
+                prompt=str(row["problem"]),
+                answer=extract_boxed_answer(str(row["solution"])).replace("\\boxed{", "").replace("}", ""),
+            )
+            return sample
+        if adapter.benchmark_id == "aime":
+            sample.update(prompt=f"{row['problem']}\n\nReturn only the final integer answer.", answer=str(row["answer"]))
+            return sample
+        raise ValueError(f"unsupported embedded adapter: {adapter.benchmark_id}")
+
+    def samples_for_adapter(self, adapter: EmbeddedBenchmarkAdapter, max_samples: int | None = None) -> list[dict[str, Any]]:
+        task_ids = adapter.task_ids[:max_samples] if max_samples is not None else adapter.task_ids
+        return [self.build_sample_from_row(adapter, task_id, self.fetch_row(adapter, task_id)) for task_id in task_ids]
+
+    def format_qwen_prompt(self, prompt: str, prompt_format: str) -> str:
+        if prompt_format == "qwen3-no-think":
+            return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        if prompt_format == "qwen3-thinking":
+            return f"<|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n"
+        if prompt_format == "raw":
+            return prompt
+        raise ValueError(f"unsupported prompt_format: {prompt_format}")
+
+    def score_benchmark_output(self, sample: dict[str, Any], output: str) -> dict[str, Any]:
+        expected = sample.get("answer")
+        if sample["scoring_rule"] == "multiple_choice_letter":
+            actual = extract_multiple_choice_letter(output)
+            return {"passed": actual == expected, "expected": expected, "actual": actual}
+        if sample["scoring_rule"] == "numeric_exact":
+            final_text = final_answer_text(output)
+            actual = extract_boxed_answer(final_text)
+            if actual == final_text:
+                actual = extract_number(output) or actual
+            return {"passed": str(actual).strip() == str(expected).strip(), "expected": expected, "actual": actual}
+        raise ValueError(f"unsupported embedded scoring rule: {sample['scoring_rule']}")
+
+    def summarize_results(self, results: list[dict[str, Any]]) -> dict[str, Any]:
+        total = len(results)
+        passed = sum(1 for result in results if result.get("passed"))
+        return {
+            "total": total,
+            "passed": passed,
+            "failed": total - passed,
+            "pass_rate": round(passed / total, 4) if total else 0.0,
+        }
 
 
 def parse_csv(value: str) -> list[str]:
@@ -90,6 +326,12 @@ def checkout_opentq(repo_url: str, repo_ref: str, checkout_dir: Path) -> Path:
 
 
 def load_runner(repo_url: str, repo_ref: str, checkout_dir: Path) -> Any:
+    local_root = repo_root_from_local_script()
+    if local_root is not None:
+        sys.path.insert(0, str(local_root))
+        return importlib.import_module("scripts.run_qwen36_benchmark_subsets")
+    if os.environ.get("OPENTQ_USE_EMBEDDED_RUNNER", "1") != "0":
+        return EmbeddedSmokeRunner()
     repo_root = checkout_opentq(repo_url, repo_ref, checkout_dir)
     sys.path.insert(0, str(repo_root))
     return importlib.import_module("scripts.run_qwen36_benchmark_subsets")
