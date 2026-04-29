@@ -4,7 +4,7 @@
 
 **Goal:** Run the remaining safe Qwen3.6 validation work overnight with Codex as Direct Responsible Individual, producing local evidence and a morning-ready summary without publishing unready artifacts.
 
-**Architecture:** The overnight runner is a detached, caffeinated shell pipeline that writes all evidence into a timestamped artifact directory. It uses the existing benchmark runner for LiveCodeBench and SWE-bench, keeps external-harness rows separate from score claims, and treats Packed/Metal as local staging checks only.
+**Architecture:** The overnight runner is a detached `screen` session wrapped in `caffeinate` that writes all evidence into a timestamped artifact directory. It uses the existing benchmark runner for LiveCodeBench and SWE-bench, keeps external-harness rows separate from score claims, and treats Packed/Metal as hardlinked local staging checks only.
 
 **Tech Stack:** Bash 3 compatible scripts, uv, pytest, ruff, llama.cpp through `scripts/run_qwen36_benchmark_subsets.py`, Hugging Face Dataset Viewer/raw dataset fetches, local artifact logs.
 
@@ -42,10 +42,11 @@ The script must:
 - run no upload and no deletion command;
 - run LiveCodeBench v6 Q3/Q4 with 12 tasks;
 - run SWE-bench patch generation with `--allow-external-harness` but no synthetic pass/fail claim.
+- restage Packed/Metal with `--link-mode hardlink`, never `copy`, to avoid duplicating tens of GiB during a low-disk overnight run.
 
 - [ ] **Step 2: Add `scripts/launch_qwen36_overnight_remaining.sh`**
 
-The launcher must start the runner with `nohup`, write `overnight.pid`, write `caffeinate.pid`, and print the log and summary paths.
+The launcher must start the runner with `screen`, wrap it in `caffeinate`, write `screen.session`, write `screen.pid`, and print the log and summary paths.
 
 - [ ] **Step 3: Verify shell syntax**
 
@@ -159,10 +160,11 @@ Expected:
 
 ```text
 run_root=artifacts/qwen3.6-27b-overnight/<timestamp>
-pid=<pid>
-caffeinate_pid=<pid>
+screen_session=opentq_qwen36_overnight
+screen_pid=<pid>
 log=artifacts/qwen3.6-27b-overnight/<timestamp>/overnight.log
 summary=artifacts/qwen3.6-27b-overnight/<timestamp>/RUN_SUMMARY.md
+attach=screen -r opentq_qwen36_overnight
 ```
 
 - [ ] **Step 2: Confirm process is alive**
@@ -170,13 +172,13 @@ summary=artifacts/qwen3.6-27b-overnight/<timestamp>/RUN_SUMMARY.md
 Run:
 
 ```bash
-ps -p "$(cat artifacts/qwen3.6-27b-overnight/*/overnight.pid | tail -n 1)" -o pid,stat,etime,command
+screen -list | rg opentq_qwen36_overnight || true
 ```
 
 Expected:
 
 ```text
-The overnight bash process is listed, or the process has already exited after writing RUN_SUMMARY.md.
+The screen session is listed, or the session has already exited after writing RUN_SUMMARY.md.
 ```
 
 ## Task 5: Morning Review

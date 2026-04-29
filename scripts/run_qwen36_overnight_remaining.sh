@@ -142,7 +142,7 @@ write_livecodebench_summary
 run_step optional "swe-bench-patch-generation-q3-q4" "uv run python scripts/run_qwen36_benchmark_subsets.py --models q3,q4 --benchmark-id swe_bench --allow-external-harness --max-samples-per-family '$SWE_SAMPLES' --max-tokens '$SWE_MAX_TOKENS' --timeout '$SWE_TIMEOUT' --output-root '$RUN_ROOT/swe-bench-patches'"
 write_swe_summary
 
-run_step optional "runtime-repo-restage-check" "PYTHONPATH=src uv run python scripts/stage_qwen36_otq_runtime_repos.py --output-root '$RUN_ROOT/hf-runtime-restage' --link-mode copy"
+run_step optional "runtime-repo-restage-check" "PYTHONPATH=src uv run python scripts/stage_qwen36_otq_runtime_repos.py --output-root '$RUN_ROOT/hf-runtime-restage' --link-mode hardlink"
 run_step optional "runtime-repo-tests" "uv run pytest tests/test_qwen36_runtime_repos.py -q"
 
 write_final_status

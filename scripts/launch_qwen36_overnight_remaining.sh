@@ -7,20 +7,32 @@ cd "$ROOT_DIR"
 OUTPUT_ROOT="${1:-artifacts/qwen3.6-27b-overnight}"
 STAMP="${RUN_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_ROOT="$OUTPUT_ROOT/$STAMP"
+SESSION_NAME="${SESSION_NAME:-opentq_qwen36_overnight}"
 mkdir -p "$RUN_ROOT"
 
 RUN_LOG="$RUN_ROOT/overnight.log"
-PID_FILE="$RUN_ROOT/overnight.pid"
-CAFFEINATE_PID_FILE="$RUN_ROOT/caffeinate.pid"
+SESSION_FILE="$RUN_ROOT/screen.session"
+SCREEN_PID_FILE="$RUN_ROOT/screen.pid"
 
-RUN_ROOT="$RUN_ROOT" nohup /bin/bash -lc "cd '$ROOT_DIR' && exec ./scripts/run_qwen36_overnight_remaining.sh" >"$RUN_LOG" 2>&1 &
-BATCH_PID=$!
-nohup caffeinate -dimsu -w "$BATCH_PID" >/dev/null 2>&1 &
-echo "$BATCH_PID" >"$PID_FILE"
-echo $! >"$CAFFEINATE_PID_FILE"
+if ! command -v screen >/dev/null 2>&1; then
+  echo "screen is required for detached overnight runs"
+  exit 1
+fi
+
+if screen -list | grep -q "[.]$SESSION_NAME"; then
+  echo "screen session already running: $SESSION_NAME"
+  echo "attach: screen -r $SESSION_NAME"
+  exit 0
+fi
+
+screen -dmS "$SESSION_NAME" bash -lc "cd '$ROOT_DIR' && RUN_ROOT='$RUN_ROOT' exec caffeinate -dimsu ./scripts/run_qwen36_overnight_remaining.sh > '$RUN_LOG' 2>&1"
+echo "$SESSION_NAME" >"$SESSION_FILE"
+screen -list >"$RUN_ROOT/screen.list" 2>/dev/null || true
+awk -v session="$SESSION_NAME" '$0 ~ "[.]" session { split($1, parts, "."); print parts[1] }' "$RUN_ROOT/screen.list" >"$SCREEN_PID_FILE"
 
 echo "run_root=$RUN_ROOT"
-echo "pid=$(cat "$PID_FILE")"
-echo "caffeinate_pid=$(cat "$CAFFEINATE_PID_FILE")"
+echo "screen_session=$SESSION_NAME"
+echo "screen_pid=$(cat "$SCREEN_PID_FILE")"
 echo "log=$RUN_LOG"
 echo "summary=$RUN_ROOT/RUN_SUMMARY.md"
+echo "attach=screen -r $SESSION_NAME"

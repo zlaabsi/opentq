@@ -2,7 +2,7 @@
 
 DRI: Codex.
 
-This checklist is for the unattended overnight run started from `scripts/launch_qwen36_overnight_remaining.sh`. It is intentionally conservative: no upload, no deletion, no BF16 sidecar, no Packed/Metal publication, and no synthetic SWE-bench score.
+This checklist is for the unattended overnight run started from `scripts/launch_qwen36_overnight_remaining.sh`. The launcher uses a detached `screen` session wrapped in `caffeinate`. It is intentionally conservative: no upload, no deletion, no BF16 sidecar, no Packed/Metal publication, and no synthetic SWE-bench score.
 
 ## Run Contract
 
@@ -20,6 +20,13 @@ This checklist is for the unattended overnight run started from `scripts/launch_
 ```bash
 cd /Users/zlaabsi/Documents/GitHub/opentq
 ./scripts/launch_qwen36_overnight_remaining.sh
+```
+
+Attach or monitor:
+
+```bash
+screen -r opentq_qwen36_overnight
+tail -f artifacts/qwen3.6-27b-overnight/*/overnight.log
 ```
 
 ## Morning Resume
