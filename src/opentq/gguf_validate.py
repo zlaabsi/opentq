@@ -141,6 +141,12 @@ def _generation_command(options: GGUFValidationOptions, binary: Path) -> list[st
     return command
 
 
+def _bench_flash_attn_value(value: str) -> str:
+    if value in {"on", "auto", "1"}:
+        return "1"
+    return "0"
+
+
 def validate_gguf(options: GGUFValidationOptions) -> dict[str, Any]:
     gguf = options.gguf
     if not gguf.exists():
@@ -186,7 +192,7 @@ def validate_gguf(options: GGUFValidationOptions) -> dict[str, Any]:
                     "-ngl",
                     str(options.gpu_layers),
                     "-fa",
-                    options.flash_attn,
+                    _bench_flash_attn_value(options.flash_attn),
                     "-p",
                     str(options.bench_prompt_tokens),
                     "-n",

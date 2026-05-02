@@ -69,6 +69,62 @@ TEXT_SKIP_CATEGORIES = {
 }
 
 
+DYNAMIC_POLICY_CATEGORIES = {
+    "embeddings",
+    "lm_head",
+    "self_attn_proj",
+    "self_attn_norm",
+    "self_attn_misc",
+    "linear_attn_proj",
+    "linear_attn_conv",
+    "linear_attn_norm",
+    "linear_attn_state",
+    "linear_attn_misc",
+    "mlp_proj",
+    "mlp_misc",
+    "layernorm",
+    "other",
+    "mtp",
+    "mtp_proj",
+    "mtp_norm",
+    "visual_attn",
+    "visual_mlp",
+    "visual_patch_embed",
+    "visual_merger",
+    "visual_pos_embed",
+    "visual_norm",
+    "visual_misc",
+    "vision_tower",
+    "mm_projector",
+}
+
+
+BASE_FTYPES = {
+    "F32",
+    "F16",
+    "BF16",
+    "Q4_0",
+    "Q4_1",
+    "Q5_0",
+    "Q5_1",
+    "Q8_0",
+    "Q2_K",
+    "Q3_K_S",
+    "Q3_K_M",
+    "Q3_K_L",
+    "Q4_K_S",
+    "Q4_K_M",
+    "Q5_K_S",
+    "Q5_K_M",
+    "Q6_K",
+    "IQ4_NL",
+    "IQ4_XS",
+    "IQ3_S",
+    "IQ3_XXS",
+    "IQ2_XS",
+}
+
+
 @dataclass(frozen=True)
 class DynamicGGUFProfile:
     name: str
@@ -107,8 +163,9 @@ class DynamicTensorPlan:
 @dataclass(frozen=True)
 class DynamicGGUFPlanOptions:
     recipe_key: str
-    profile_name: str
     output_dir: Path
+    profile_name: str | None = None
+    policy_file: Path | None = None
     llama_cpp_dir: Path = Path("../llama.cpp")
     source_gguf: Path | None = None
     target_gguf: Path | None = None
@@ -224,6 +281,132 @@ def get_dynamic_profile(name: str) -> DynamicGGUFProfile:
             return profile
     available = ", ".join(sorted(QWEN36_DYNAMIC_PROFILES))
     raise KeyError(f"unknown dynamic GGUF profile {name!r}; available: {available}")
+
+
+def _load_policy_payload(path: Path) -> dict[str, Any]:
+    suffix = path.suffix.lower()
+    text = path.read_text(encoding="utf-8")
+    if suffix == ".json":
+        payload = json.loads(text)
+    elif suffix in {".yaml", ".yml"}:
+        try:
+            import yaml
+        except ImportError as exc:  # pragma: no cover - dependency is declared, this is a packaging guard
+            raise RuntimeError("YAML policy files require PyYAML; install opentq with project dependencies") from exc
+        payload = yaml.safe_load(text)
+    else:
+        raise ValueError(f"unsupported dynamic GGUF policy extension {suffix!r}; use .json, .yaml, or .yml")
+    if not isinstance(payload, dict):
+        raise ValueError(f"dynamic GGUF policy {path} must contain a JSON/YAML object")
+    return payload
+
+
+def _string_field(payload: dict[str, Any], key: str, errors: list[str], *, default: str | None = None) -> str:
+    value = payload.get(key, default)
+    if value is None:
+        errors.append(f"missing required field {key!r}")
+        return ""
+    if not isinstance(value, str):
+        errors.append(f"field {key!r} must be a string")
+        return ""
+    return value.strip()
+
+
+def _bool_field(payload: dict[str, Any], key: str, errors: list[str], *, default: bool) -> bool:
+    value = payload.get(key, default)
+    if not isinstance(value, bool):
+        errors.append(f"field {key!r} must be a boolean")
+        return default
+    return value
+
+
+def _int_field(payload: dict[str, Any], key: str, errors: list[str], *, default: int) -> int:
+    value = payload.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        errors.append(f"field {key!r} must be a non-negative integer")
+        return default
+    return value
+
+
+def _policy_type_map(payload: dict[str, Any], key: str, errors: list[str], *, required: bool = False) -> dict[str, str]:
+    value = payload.get(key)
+    if value is None:
+        if required:
+            errors.append(f"missing required field {key!r}")
+        return {}
+    if not isinstance(value, dict):
+        errors.append(f"field {key!r} must be an object mapping tensor categories to GGUF tensor types")
+        return {}
+
+    resolved: dict[str, str] = {}
+    for category, ggml_type in value.items():
+        category_ok = isinstance(category, str)
+        ggml_type_ok = isinstance(ggml_type, str)
+        category_name = category.strip() if category_ok else repr(category)
+        tensor_type = ggml_type.strip().upper() if ggml_type_ok else repr(ggml_type)
+
+        if not category_ok or category_name not in DYNAMIC_POLICY_CATEGORIES:
+            allowed = ", ".join(sorted(DYNAMIC_POLICY_CATEGORIES))
+            errors.append(f"{key}.{category_name} is not a known tensor category; allowed: {allowed}")
+            category_ok = False
+        if not ggml_type_ok or tensor_type not in GGML_TYPE_BPW:
+            allowed = ", ".join(sorted(GGML_TYPE_BPW))
+            errors.append(f"{key}.{category_name} uses unknown GGUF tensor type {tensor_type}; allowed: {allowed}")
+            ggml_type_ok = False
+        if category_ok and ggml_type_ok:
+            resolved[category_name] = tensor_type
+    return resolved
+
+
+def load_dynamic_policy_file(path: str | Path) -> DynamicGGUFProfile:
+    policy_path = Path(path)
+    payload = _load_policy_payload(policy_path)
+    errors: list[str] = []
+
+    name = _string_field(payload, "name", errors)
+    base_ftype = _string_field(payload, "base_ftype", errors).upper()
+    target = _string_field(payload, "target", errors)
+    notes = _string_field(payload, "notes", errors, default="")
+    requires_imatrix = _bool_field(payload, "requires_imatrix", errors, default=False)
+    edge_layers = _int_field(payload, "edge_layers", errors, default=2)
+    periodic_stride = _int_field(payload, "periodic_stride", errors, default=4)
+    category_types = _policy_type_map(payload, "category_types", errors, required=True)
+    edge_overrides = _policy_type_map(payload, "edge_overrides", errors)
+    periodic_overrides = _policy_type_map(payload, "periodic_overrides", errors)
+
+    if base_ftype and base_ftype not in BASE_FTYPES:
+        allowed = ", ".join(sorted(BASE_FTYPES))
+        errors.append(f"base_ftype {base_ftype!r} is not supported by the stock GGUF planner; allowed: {allowed}")
+    if not category_types:
+        errors.append("category_types must define at least one tensor category")
+
+    if errors:
+        joined = "; ".join(errors)
+        raise ValueError(f"invalid dynamic GGUF policy {policy_path}: {joined}")
+
+    return DynamicGGUFProfile(
+        name=name,
+        base_ftype=base_ftype,
+        target=target,
+        requires_imatrix=requires_imatrix,
+        category_types=category_types,
+        edge_layers=edge_layers,
+        edge_overrides=edge_overrides,
+        periodic_stride=periodic_stride,
+        periodic_overrides=periodic_overrides,
+        notes=notes,
+    )
+
+
+def resolve_dynamic_profile_source(options: DynamicGGUFPlanOptions) -> tuple[DynamicGGUFProfile, dict[str, str]]:
+    if (options.profile_name is None) == (options.policy_file is None):
+        raise ValueError("dynamic GGUF planning requires exactly one of profile_name or policy_file")
+    if options.policy_file is not None:
+        profile = load_dynamic_policy_file(options.policy_file)
+        return profile, {"kind": "policy_file", "path": str(options.policy_file)}
+    assert options.profile_name is not None
+    profile = get_dynamic_profile(options.profile_name)
+    return profile, {"kind": "builtin_profile", "name": profile.name}
 
 
 def dynamic_profiles_payload() -> list[dict[str, Any]]:
@@ -499,7 +682,7 @@ def make_executable(path: Path) -> None:
 
 def write_dynamic_gguf_plan(options: DynamicGGUFPlanOptions) -> dict[str, Any]:
     recipe = get_recipe(options.recipe_key)
-    profile = get_dynamic_profile(options.profile_name)
+    profile, policy_source = resolve_dynamic_profile_source(options)
     index_data = fetch_safetensors_index(recipe.model_id)
     weight_map = index_data["weight_map"]
 
@@ -563,6 +746,7 @@ def write_dynamic_gguf_plan(options: DynamicGGUFPlanOptions) -> dict[str, Any]:
         "schema": "opentq.dynamic_gguf_plan.v1",
         "model_id": recipe.model_id,
         "recipe_key": recipe.key,
+        "policy_source": policy_source,
         "profile": asdict(profile),
         "compatibility": {
             "gguf_tensor_types": "standard llama.cpp GGML types only",

@@ -1,0 +1,23 @@
+name: MY-DYN-Q4
+base_ftype: Q4_K_M
+target: custom 32GB Apple Silicon profile
+requires_imatrix: false
+
+category_types:
+  embeddings: Q6_K
+  lm_head: Q8_0
+  self_attn_proj: Q6_K
+  linear_attn_proj: Q5_K
+  linear_attn_conv: F16
+  mlp_proj: Q3_K
+
+edge_layers: 2
+edge_overrides:
+  mlp_proj: Q5_K
+  self_attn_proj: Q8_0
+
+periodic_stride: 4
+periodic_overrides:
+  self_attn_proj: Q6_K
+
+notes: Example external policy for local dynamic-allocation experiments.

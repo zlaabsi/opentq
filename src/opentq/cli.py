@@ -20,6 +20,7 @@ from .quality_eval import GGUFQualityEvalOptions, run_quality_eval
 from .release_pack import pack_release
 from .recipes import get_recipe, recipe_markdown, recipe_to_dict
 from .run import build_release_plan, quantize_release
+from .runtime_gate import PackAuditOptions, RuntimeProbeOptions, audit_packed_runtime, run_runtime_probe, write_runtime_fixtures
 from .status import build_status_payload, print_status, watch_status
 from .variants import VARIANTS, get_variant
 
@@ -66,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     quantize_release_parser.add_argument("--vision-only", action="store_true")
     quantize_release_parser.add_argument("--no-skip-existing", action="store_true")
 
-    status = sub.add_parser("status", help="Inspect or watch the overnight Qwen3.6-27B quantization batch.")
+    status = sub.add_parser("status", help="Inspect or watch a Qwen3.6-27B quantization batch.")
     status.add_argument("--root", default="artifacts/qwen3.6-27b")
     status.add_argument("--watch", action="store_true")
     status.add_argument("--interval", type=float, default=10.0)
@@ -89,6 +90,27 @@ def build_parser() -> argparse.ArgumentParser:
     hf_release_parser.add_argument("--repo-id", required=True)
     hf_release_parser.add_argument("--link-mode", choices=("hardlink", "copy", "symlink", "none"), default="hardlink")
 
+    audit_pack_runtime = sub.add_parser("audit-pack-runtime", help="Validate an OpenTQ packed release without running inference.")
+    audit_pack_runtime.add_argument("--packed", required=True)
+    audit_pack_runtime.add_argument("--output")
+    audit_pack_runtime.add_argument("--max-tensors", type=int)
+    audit_pack_runtime.add_argument("--dequantize-samples", type=int, default=4)
+
+    runtime_fixtures = sub.add_parser("runtime-fixtures", help="Emit OpenTQ block fixtures for external runtime probes.")
+    runtime_fixtures.add_argument("--packed", required=True)
+    runtime_fixtures.add_argument("--output", required=True)
+    runtime_fixtures.add_argument("--max-fixtures-per-variant", type=int, default=1)
+
+    probe_pack_runtime = sub.add_parser("probe-pack-runtime", help="Run packed-release fixtures against an external OpenTQ dequant probe.")
+    probe_pack_runtime.add_argument("--packed", required=True)
+    probe_pack_runtime.add_argument("--fixtures-output", required=True)
+    probe_pack_runtime.add_argument("--probe-binary", required=True)
+    probe_pack_runtime.add_argument("--output", required=True)
+    probe_pack_runtime.add_argument("--audit-max-tensors", type=int)
+    probe_pack_runtime.add_argument("--audit-dequantize-samples", type=int, default=4)
+    probe_pack_runtime.add_argument("--max-fixtures-per-variant", type=int, default=1)
+    probe_pack_runtime.add_argument("--timeout", type=float, default=120.0)
+
     gguf_plan = sub.add_parser("gguf-plan", help="Write the GGUF integration plan for a packed OpenTQ release.")
     gguf_plan.add_argument("--packed", required=True)
     gguf_plan.add_argument("--output", required=True)
@@ -102,7 +124,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     dynamic_gguf = sub.add_parser("dynamic-gguf-plan", help="Create a stock llama.cpp GGUF dynamic allocation plan.")
     dynamic_gguf.add_argument("--recipe", default="qwen3.6-27b")
-    dynamic_gguf.add_argument("--profile", required=True)
+    dynamic_gguf_source = dynamic_gguf.add_mutually_exclusive_group(required=True)
+    dynamic_gguf_source.add_argument("--profile")
+    dynamic_gguf_source.add_argument("--policy-file")
     dynamic_gguf.add_argument("--output", required=True)
     dynamic_gguf.add_argument("--llama-cpp", default="../llama.cpp")
     dynamic_gguf.add_argument("--source-gguf")
@@ -324,6 +348,53 @@ def cmd_prepare_hf(packed: str, output: str, repo_id: str, link_mode: str) -> in
     return 0
 
 
+def cmd_audit_pack_runtime(packed: str, output: str | None, max_tensors: int | None, dequantize_samples: int) -> int:
+    payload = audit_packed_runtime(
+        PackAuditOptions(
+            packed_dir=Path(packed),
+            max_tensors=max_tensors,
+            dequantize_samples=dequantize_samples,
+        )
+    )
+    if output:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)
+        Path(output).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["overall_pass"] else 1
+
+
+def cmd_runtime_fixtures(packed: str, output: str, max_fixtures_per_variant: int) -> int:
+    payload = write_runtime_fixtures(packed, output, max_per_variant=max_fixtures_per_variant)
+    print(json.dumps(payload, indent=2))
+    return 0
+
+
+def cmd_probe_pack_runtime(
+    packed: str,
+    fixtures_output: str,
+    probe_binary: str,
+    output: str,
+    audit_max_tensors: int | None,
+    audit_dequantize_samples: int,
+    max_fixtures_per_variant: int,
+    timeout: float,
+) -> int:
+    payload = run_runtime_probe(
+        RuntimeProbeOptions(
+            packed_dir=Path(packed),
+            fixtures_output=Path(fixtures_output),
+            probe_binary=Path(probe_binary),
+            output=Path(output),
+            audit_max_tensors=audit_max_tensors,
+            audit_dequantize_samples=audit_dequantize_samples,
+            max_fixtures_per_variant=max_fixtures_per_variant,
+            timeout_seconds=timeout,
+        )
+    )
+    print(json.dumps(payload, indent=2))
+    return 0 if payload["overall_pass"] else 1
+
+
 def cmd_gguf_plan(packed: str, output: str) -> int:
     payload = write_gguf_plan(packed, output)
     summary = {
@@ -354,7 +425,8 @@ def cmd_export_gguf(packed: str, output: str, llama_cpp: str, max_tensors: int |
 
 def cmd_dynamic_gguf_plan(
     recipe: str,
-    profile: str,
+    profile: str | None,
+    policy_file: str | None,
     output: str,
     llama_cpp: str,
     source_gguf: str | None,
@@ -367,6 +439,7 @@ def cmd_dynamic_gguf_plan(
         DynamicGGUFPlanOptions(
             recipe_key=recipe,
             profile_name=profile,
+            policy_file=Path(policy_file) if policy_file else None,
             output_dir=Path(output),
             llama_cpp_dir=Path(llama_cpp),
             source_gguf=Path(source_gguf) if source_gguf else None,
@@ -382,6 +455,7 @@ def cmd_dynamic_gguf_plan(
                 "schema": payload["schema"],
                 "model_id": payload["model_id"],
                 "profile": payload["profile"]["name"],
+                "policy_source": payload["policy_source"],
                 "base_ftype": payload["profile"]["base_ftype"],
                 "compatibility": payload["compatibility"],
                 "outputs": payload["outputs"],
@@ -546,6 +620,21 @@ def main() -> int:
         return cmd_pack_release(args.input, args.output, args.force, args.max_tensors, args.copy_dtype)
     if args.command == "prepare-hf":
         return cmd_prepare_hf(args.packed, args.output, args.repo_id, args.link_mode)
+    if args.command == "audit-pack-runtime":
+        return cmd_audit_pack_runtime(args.packed, args.output, args.max_tensors, args.dequantize_samples)
+    if args.command == "runtime-fixtures":
+        return cmd_runtime_fixtures(args.packed, args.output, args.max_fixtures_per_variant)
+    if args.command == "probe-pack-runtime":
+        return cmd_probe_pack_runtime(
+            args.packed,
+            args.fixtures_output,
+            args.probe_binary,
+            args.output,
+            args.audit_max_tensors,
+            args.audit_dequantize_samples,
+            args.max_fixtures_per_variant,
+            args.timeout,
+        )
     if args.command == "gguf-plan":
         return cmd_gguf_plan(args.packed, args.output)
     if args.command == "export-gguf":
@@ -554,6 +643,7 @@ def main() -> int:
         return cmd_dynamic_gguf_plan(
             args.recipe,
             args.profile,
+            args.policy_file,
             args.output,
             args.llama_cpp,
             args.source_gguf,

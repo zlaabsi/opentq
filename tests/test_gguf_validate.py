@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from opentq.gguf_validate import GGUFValidationOptions, validate_gguf
+from opentq.gguf_validate import GGUFValidationOptions, _bench_flash_attn_value, validate_gguf
 
 
 def _write_executable(path: Path, body: str) -> None:
@@ -54,3 +54,11 @@ def test_validate_gguf_fails_without_generation(tmp_path: Path) -> None:
 
     assert payload["overall_pass"] is False
     assert payload["gates"]["bounded_generation"] is False
+
+
+def test_bench_flash_attention_uses_llama_bench_boolean_values() -> None:
+    assert _bench_flash_attn_value("on") == "1"
+    assert _bench_flash_attn_value("auto") == "1"
+    assert _bench_flash_attn_value("1") == "1"
+    assert _bench_flash_attn_value("off") == "0"
+    assert _bench_flash_attn_value("0") == "0"

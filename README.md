@@ -54,7 +54,25 @@ The current flagship public artifact is the stock-compatible [`Qwen3.6-27B-OTQ-G
 - **Transparent allocation:** norms/state remain high precision; projection-heavy families absorb most compression.
 - **Practical quality checks:** paired BF16-vs-GGUF mini-subsets with pinned task IDs and public reproducibility data.
 - **Runtime gates:** local Apple Silicon checks with `llama.cpp`/Metal, bounded generation, release evals, and 8K prefill/decode measurements.
+- **Custom policies:** users can define their own dynamic allocation policy with YAML/JSON via `--policy-file`.
+- **Run monitor:** long quantization jobs can be watched through the terminal dashboard and machine-readable status output.
 - **Research runtime tracks:** native OpenTQ payloads and compressed-domain runtime work are tracked separately from stock GGUF releases.
+
+## Practical Workflows
+
+| Workflow | Command / Doc | What It Gives You |
+| --- | --- | --- |
+| List built-in allocation profiles | `uv run opentq dynamic-gguf-profiles` | discover the bundled Q3/Q4/Q5 dynamic GGUF policies |
+| Generate a stock-compatible plan | `uv run opentq dynamic-gguf-plan --profile OTQ-DYN-Q4_K_M ...` | `plan.json`, `tensor-types.txt`, annotated tensor map, runnable `quantize.sh` |
+| Use a custom allocation policy | `uv run opentq dynamic-gguf-plan --policy-file policies/qwen36-custom-dyn-q4.yaml ...` | define where precision is spent without editing OpenTQ source |
+| Watch a long run | `uv run opentq monitor --root artifacts/qwen3.6-27b --watch` | terminal dashboard for active profile, tensor, category progress, and release state |
+| Read the full guide | [`docs/cookbook.md`](docs/cookbook.md) | end-to-end examples for profiles, policies, monitoring, validation, and release evidence |
+
+OpenTQ's stock-compatible path supports custom **allocation** policies, not arbitrary new GGUF kernels. You can choose which tensor families use `F16`, `Q3_K`, `Q4_K`, `Q5_K`, `Q6_K`, `Q8_0`, etc.; the resulting GGUF still relies on tensor types supported by `llama.cpp`.
+
+<p align="center">
+  <img src="docs/assets/opentq-monitor-overview.png" alt="OpenTQ terminal quantization monitor" width="860">
+</p>
 
 ## Public Release Matrix
 
@@ -63,6 +81,8 @@ The current flagship public artifact is the stock-compatible [`Qwen3.6-27B-OTQ-G
 | Stock GGUF | [`zlaabsi/Qwen3.6-27B-OTQ-GGUF`](https://huggingface.co/zlaabsi/Qwen3.6-27B-OTQ-GGUF) | stock `llama.cpp` | public | local text inference with standard GGUF loaders |
 | Reproducibility dataset | [`zlaabsi/Qwen3.6-27B-OTQ-GGUF-benchmarks`](https://huggingface.co/datasets/zlaabsi/Qwen3.6-27B-OTQ-GGUF-benchmarks) | JSON/CSV assets | public | pinned BF16-vs-GGUF samples, raw outputs, reports |
 | BF16 sidecar | [`zlaabsi/opentq-qwen36-bf16-sidecar`](https://huggingface.co/datasets/zlaabsi/opentq-qwen36-bf16-sidecar) | HF Jobs H200 output | public | matching BF16 baseline for the practical subset |
+| Packed `.otq` | local `Qwen3.6-27B-OTQ-Packed` artifacts | OpenTQ runtime probes | gated locally | custom-runtime integration and parity testing |
+| Custom OpenTQ GGUF | local `Qwen3.6-27B-OTQ-TQ3_SB4-Metal.gguf` | patched `llama.cpp` Metal path | gated locally | native Metal runtime experiments |
 
 ## Qwen3.6-27B GGUF Variants
 
@@ -186,6 +206,15 @@ uv run opentq dynamic-gguf-plan \
   --llama-cpp /path/to/llama.cpp
 ```
 
+Create a custom allocation plan from an external policy file:
+
+```bash
+uv run opentq dynamic-gguf-plan \
+  --policy-file policies/qwen36-custom-dyn-q4.yaml \
+  --output artifacts/qwen36-custom-q4 \
+  --llama-cpp /path/to/llama.cpp
+```
+
 Build release reports and status pages:
 
 ```bash
@@ -201,7 +230,9 @@ Practical mini-subsets are reported as quantization-regression signals for the r
 
 ## Further Reading
 
+- [Cookbook](docs/cookbook.md)
 - [Architecture](docs/architecture.md)
 - [Variant naming](docs/variants.md)
 - [Dynamic-compatible GGUF path](docs/dynamic-compatible-gguf.md)
+- [Native OpenTQ runtime track](docs/native-opentq-runtime.md)
 - [Benchmark methodology](docs/llm-benchmark-protocol.md)

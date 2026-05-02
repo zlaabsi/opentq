@@ -42,12 +42,59 @@ uv run opentq dynamic-gguf-plan \
   --target-gguf artifacts/qwen3.6-27b-dynamic-gguf/Qwen3.6-27B-OTQ-DYN-Q4_K_M-GGUF/Qwen3.6-27B-OTQ-DYN-Q4_K_M.gguf
 ```
 
+Use an external policy file when you want custom allocation without editing OpenTQ source:
+
+```bash
+uv run opentq dynamic-gguf-plan \
+  --policy-file policies/qwen36-custom-dyn-q4.yaml \
+  --output artifacts/qwen3.6-27b-dynamic-gguf/my-custom-q4 \
+  --llama-cpp ../llama.cpp \
+  --source-gguf artifacts/qwen3.6-27b-source/Qwen3.6-27B-BF16.gguf \
+  --target-gguf artifacts/qwen3.6-27b-dynamic-gguf/my-custom-q4/Qwen3.6-27B-MY-DYN-Q4.gguf
+```
+
 Outputs:
 
 - `plan.json`: full allocation plan and compatibility metadata
 - `tensor-types.txt`: stock `llama-quantize --tensor-type-file` input, no comments
 - `tensor-types.annotated.tsv`: readable tensor allocation table
 - `quantize.sh`: runnable stock llama.cpp quantization script
+
+## External Policies
+
+External policies are YAML or JSON files that define where OpenTQ spends precision. They make custom dynamic allocation first-class while keeping the stock-compatible GGUF path on standard llama.cpp tensor types.
+
+Minimal schema:
+
+```yaml
+name: MY-DYN-Q4
+base_ftype: Q4_K_M
+target: custom 32GB Apple Silicon profile
+requires_imatrix: false
+
+category_types:
+  embeddings: Q6_K
+  lm_head: Q8_0
+  self_attn_proj: Q6_K
+  linear_attn_proj: Q5_K
+  linear_attn_conv: F16
+  mlp_proj: Q3_K
+
+edge_layers: 2
+edge_overrides:
+  mlp_proj: Q5_K
+  self_attn_proj: Q8_0
+
+periodic_stride: 4
+periodic_overrides:
+  self_attn_proj: Q6_K
+
+notes: user supplied local experiment
+```
+
+`category_types`, `edge_overrides`, and `periodic_overrides` accept known Qwen3.6-27B tensor families and standard GGUF tensor types such as `F16`, `Q3_K`, `Q4_K`, `Q5_K`, `Q6_K`, `Q8_0`, and `IQ4_NL`. `base_ftype` is the fallback quantization target passed to `llama-quantize`, for example `Q3_K_M`, `Q4_K_M`, `Q5_K_M`, or `IQ4_NL`.
+
+This is custom allocation policy, not arbitrary custom GGUF kernels. The stock-compatible track lets users customize where precision is spent; new OpenTQ kernels belong to the native runtime track.
 
 ## Quantize
 
