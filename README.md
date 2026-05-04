@@ -10,11 +10,6 @@
   <a href="https://github.com/zlaabsi/opentq">
     <img src="https://img.shields.io/badge/GitHub-opentq-0a1628?style=flat-square" alt="GitHub repository">
   </a>
-  <a href="https://github.com/zlaabsi/opentq/stargazers">
-    <img src="https://img.shields.io/github/stars/zlaabsi/opentq?style=flat-square" alt="GitHub stars">
-  </a>
-  <a href="https://github.com/zlaabsi/opentq/network/members">
-    <img src="https://img.shields.io/github/forks/zlaabsi/opentq?style=flat-square" alt="GitHub forks">
   </a>
   <a href="https://github.com/zlaabsi/opentq/commits/main">
     <img src="https://img.shields.io/github/last-commit/zlaabsi/opentq?style=flat-square" alt="Last commit">
@@ -36,6 +31,14 @@
   </a>
 </p>
 
+# OpenTQ
+
+`OpenTQ` is an open quantization lab for low-bit weight formats. It turns quantization from an opaque "one setting for the whole model" step into an auditable release process: plan tensor allocations, generate artifacts, run runtime gates, publish evidence, and keep the claims tied to reproducible files.
+
+The current flagship public artifact is the stock-compatible [`Qwen3.6-27B-OTQ-GGUF`](https://huggingface.co/zlaabsi/Qwen3.6-27B-OTQ-GGUF) release. It uses standard GGUF tensor types, so users can run it with stock `llama.cpp`, while OpenTQ controls the tensor-family allocation policy and validation harness.
+
+---
+
 <p align="center">
   <img src="docs/assets/qwen36-paired-bf16-quant-delta.png" alt="Qwen3.6 paired BF16 vs GGUF quality signal" width="860">
 </p>
@@ -43,10 +46,6 @@
 <p align="center">
   Same-task practical mini-subset for <code>Qwen/Qwen3.6-27B</code>: BF16 <code>157/232</code>, Q3_K_M <code>154/232</code>, Q4_K_M <code>155/232</code>, Q5_K_M <code>155/232</code>. This is a release regression signal, not a leaderboard replacement.
 </p>
-
-`OpenTQ` is an open quantization lab for low-bit weight formats. It turns quantization from an opaque "one setting for the whole model" step into an auditable release process: plan tensor allocations, generate artifacts, run runtime gates, publish evidence, and keep the claims tied to reproducible files.
-
-The current flagship public artifact is the stock-compatible [`Qwen3.6-27B-OTQ-GGUF`](https://huggingface.co/zlaabsi/Qwen3.6-27B-OTQ-GGUF) release. It uses standard GGUF tensor types, so users can run it with stock `llama.cpp`, while OpenTQ controls the tensor-family allocation policy and validation harness.
 
 ## At A Glance
 
@@ -119,17 +118,18 @@ llama-cli \
   OpenTQ does not apply a flat quantization recipe. It assigns standard GGUF tensor types per tensor family, then publishes the allocation map so users can inspect where precision was spent.
 </p>
 
-| Variant | Mapped Tensors | F16 | Q3_K | Q4_K | Q5_K | Q6_K | Q8_0 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `Q3_K_M` | 851 | 353 | 180 | 252 | 65 | 1 | 0 |
-| `Q4_K_M` | 851 | 353 | 0 | 180 | 237 | 80 | 1 |
-| `Q5_K_M` | 851 | 353 | 0 | 0 | 180 | 237 | 81 |
 
 <p align="center">
   <img src="docs/assets/qwen36-allocation-policy.png" alt="Where OpenTQ spends precision" width="860">
 </p>
 
 The compact profile spends fewer bits on bulk projection tensors, while normalization, state, embeddings, self-attention anchors, and output-sensitive tensors stay higher precision. The goal is not just a smaller file; it is a quantization policy that can be audited.
+
+| Variant | Mapped Tensors | F16 | Q3_K | Q4_K | Q5_K | Q6_K | Q8_0 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `Q3_K_M` | 851 | 353 | 180 | 252 | 65 | 1 | 0 |
+| `Q4_K_M` | 851 | 353 | 0 | 180 | 237 | 80 | 1 |
+| `Q5_K_M` | 851 | 353 | 0 | 0 | 180 | 237 | 81 |
 
 ## Quality Signal
 
