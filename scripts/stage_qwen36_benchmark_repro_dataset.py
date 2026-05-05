@@ -42,6 +42,19 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
             handle.write(json.dumps(row, sort_keys=True) + "\n")
 
 
+def viewer_scalar(value: Any) -> str | int | float | bool | None:
+    """Return a Dataset Viewer-stable scalar.
+
+    The Hub JSON/JSONL loader infers a single Arrow type per column. Upstream
+    benchmark answers can be strings, numbers, lists, or dicts depending on the
+    task, so complex values are serialized to JSON strings before upload.
+    """
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
 def index_run(payload: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
     indexed: dict[tuple[str, str], dict[str, Any]] = {}
     for benchmark in payload.get("benchmarks", []):
@@ -60,9 +73,9 @@ def score_fields(result: dict[str, Any]) -> dict[str, Any]:
     score = result.get("score", {})
     return {
         "passed": bool(result.get("passed", False)),
-        "actual": score.get("actual"),
-        "expected": score.get("expected"),
-        "stdout_tail": result.get("stdout_tail"),
+        "actual": viewer_scalar(score.get("actual")),
+        "expected": viewer_scalar(score.get("expected")),
+        "stdout_tail": viewer_scalar(result.get("stdout_tail")),
         "elapsed_seconds": result.get("elapsed_seconds"),
     }
 
@@ -89,8 +102,8 @@ def paired_sample_rows(bf16: dict[str, Any], q3: dict[str, Any], q4: dict[str, A
             "prompt_format": sample.get("prompt_format"),
             "scoring_rule": sample.get("scoring_rule"),
             "max_tokens": sample.get("max_tokens"),
-            "answer": sample.get("answer"),
-            "prompt": sample.get("prompt"),
+            "answer": viewer_scalar(sample.get("answer")),
+            "prompt": viewer_scalar(sample.get("prompt")),
         }
         for name, index in runs.items():
             result = index.get((benchmark_id, task_id), {}).get("result", {})
@@ -120,6 +133,15 @@ tags:
 - quantization
 task_categories:
 - text-generation
+configs:
+- config_name: paired_samples
+  data_files:
+  - split: train
+    path: data/paired_samples.jsonl
+- config_name: paired_summary
+  data_files:
+  - split: train
+    path: data/paired_summary.jsonl
 ---
 
 # Qwen3.6-27B OTQ GGUF Benchmark Reproducibility

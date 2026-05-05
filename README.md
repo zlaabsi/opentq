@@ -67,6 +67,7 @@ The current flagship public artifact is the stock-compatible [`Qwen3.6-27B-OTQ-G
 | Use a custom allocation policy | `uv run opentq dynamic-gguf-plan --policy-file policies/qwen36-custom-dyn-q4.yaml ...` | define where precision is spent without editing OpenTQ source |
 | Watch a long run | `uv run opentq monitor --root artifacts/qwen3.6-27b --watch` | terminal dashboard for active profile, tensor, category progress, and release state |
 | Read the full guide | [`docs/cookbook.md`](docs/cookbook.md) | end-to-end examples for profiles, policies, monitoring, validation, and release evidence |
+| Inspect future UI direction | [`docs/allocation-ui.md`](docs/allocation-ui.md) | tensor treemap, layer/family filters, error overlays, and policy diff design |
 
 OpenTQ's stock-compatible path supports custom **allocation** policies, not arbitrary new GGUF kernels. You can choose which tensor families use `F16`, `Q3_K`, `Q4_K`, `Q5_K`, `Q6_K`, `Q8_0`, etc.; the resulting GGUF still relies on tensor types supported by `llama.cpp`.
 
@@ -235,4 +236,7 @@ Practical mini-subsets are reported as quantization-regression signals for the r
 - [Variant naming](docs/variants.md)
 - [Dynamic-compatible GGUF path](docs/dynamic-compatible-gguf.md)
 - [Native OpenTQ runtime track](docs/native-opentq-runtime.md)
+- [Allocation UI roadmap](docs/allocation-ui.md)
+- [KV-cache layer policy roadmap](docs/research/kv-cache-layer-policy.md)
+- [Quantization-aware pruning roadmap](docs/research/quantization-aware-pruning.md)
 - [Benchmark methodology](docs/llm-benchmark-protocol.md)
