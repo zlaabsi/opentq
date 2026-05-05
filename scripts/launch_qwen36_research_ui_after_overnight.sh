@@ -18,7 +18,7 @@ timestamp() {
 }
 
 session_running() {
-  screen -list 2>/dev/null | grep -q "[.]$WAIT_FOR_SESSION"
+  { screen -list 2>/dev/null || true; } | grep -q "[.]$WAIT_FOR_SESSION"
 }
 
 waited=0

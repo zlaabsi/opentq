@@ -84,7 +84,7 @@ run_step required "pytest-research-ui" \
   "uv run pytest tests/test_kv_cache.py tests/test_pruning.py tests/test_allocation_ui.py -q"
 
 run_step required "dynamic-plan-q4" \
-  "uv run opentq dynamic-gguf-plan --profile OTQ-DYN-Q4_K_M --recipe qwen3.6-27b --output '$RUN_ROOT/dynamic-plan-q4' --no-converter-mapping"
+  "uv run opentq dynamic-gguf-plan --profile OTQ-DYN-Q4_K_M --recipe qwen3.6-27b --output '$RUN_ROOT/dynamic-plan-q4'"
 
 run_step required "kv-cache-layer-policy" \
   "uv run opentq kv-cache-plan --model-id '$MODEL_ID' --weight-plan '$RUN_ROOT/dynamic-plan-q4/plan.json' --output '$RUN_ROOT/kv-cache-policy' --default-dtype fp8_e4m3 --promote-dtype bf16 --edge-layers 2 --periodic-stride 8"
