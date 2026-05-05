@@ -6,6 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
+from .allocation_ui import AllocationUIOptions, write_allocation_ui
 from .hf import base_weight_size_gib, fetch_safetensors_index
 from .gguf import write_gguf_plan
 from .gguf_export import GGUFExportOptions, export_gguf
@@ -14,7 +15,9 @@ from .dynamic_gguf import DynamicGGUFPlanOptions, dynamic_profiles_payload, writ
 from .hf_gguf_release import prepare_hf_gguf_release
 from .hf_release import prepare_hf_release
 from .inventory import build_inventory, inventory_summary
+from .kv_cache import KVCachePlanOptions, write_kv_cache_policy
 from .monitor import build_monitor_payload, print_monitor, watch_monitor
+from .pruning import PruningCandidateOptions, write_pruning_candidates
 from .quantize import quantize_tensor
 from .quality_eval import GGUFQualityEvalOptions, run_quality_eval
 from .release_pack import pack_release
@@ -134,6 +137,29 @@ def build_parser() -> argparse.ArgumentParser:
     dynamic_gguf.add_argument("--include-vision", action="store_true")
     dynamic_gguf.add_argument("--vision-only", action="store_true")
     dynamic_gguf.add_argument("--no-converter-mapping", action="store_true")
+
+    kv_cache_plan = sub.add_parser("kv-cache-plan", help="Write a per-layer KV cache precision policy.")
+    kv_cache_plan.add_argument("--output", required=True)
+    kv_cache_plan.add_argument("--model-id", default="Qwen/Qwen3.6-27B")
+    kv_cache_plan.add_argument("--num-layers", type=int, default=64)
+    kv_cache_plan.add_argument("--default-dtype", default="fp8_e4m3")
+    kv_cache_plan.add_argument("--promote-dtype", default="bf16")
+    kv_cache_plan.add_argument("--edge-layers", type=int, default=2)
+    kv_cache_plan.add_argument("--periodic-stride", type=int, default=8)
+    kv_cache_plan.add_argument("--weight-plan")
+
+    pruning_candidates = sub.add_parser("pruning-candidates", help="Rank quantization-aware structured pruning candidates.")
+    pruning_candidates.add_argument("--plan", required=True)
+    pruning_candidates.add_argument("--output", required=True)
+    pruning_candidates.add_argument("--max-candidates", type=int, default=256)
+    pruning_candidates.add_argument("--prune-threshold", type=float, default=0.78)
+    pruning_candidates.add_argument("--aggressive-threshold", type=float, default=0.56)
+
+    allocation_ui = sub.add_parser("allocation-ui", help="Generate an inspectable tensor allocation dashboard artifact.")
+    allocation_ui.add_argument("--plan", required=True)
+    allocation_ui.add_argument("--output", required=True)
+    allocation_ui.add_argument("--title", default="OpenTQ Allocation Explorer")
+    allocation_ui.add_argument("--metrics")
 
     hf_gguf_release_parser = sub.add_parser("prepare-hf-gguf", help="Create a Hugging Face staging folder from a GGUF artifact.")
     hf_gguf_release_parser.add_argument("--gguf", required=True)
@@ -467,6 +493,97 @@ def cmd_dynamic_gguf_plan(
     return 0 if payload["summary"]["unmapped_count"] == 0 else 1
 
 
+def cmd_kv_cache_plan(
+    output: str,
+    model_id: str,
+    num_layers: int,
+    default_dtype: str,
+    promote_dtype: str,
+    edge_layers: int,
+    periodic_stride: int,
+    weight_plan: str | None,
+) -> int:
+    payload = write_kv_cache_policy(
+        KVCachePlanOptions(
+            output_dir=Path(output),
+            model_id=model_id,
+            num_layers=num_layers,
+            default_dtype=default_dtype,
+            promote_dtype=promote_dtype,
+            edge_layers=edge_layers,
+            periodic_stride=periodic_stride,
+            weight_plan=Path(weight_plan) if weight_plan else None,
+        )
+    )
+    print(
+        json.dumps(
+            {
+                "schema": payload["schema"],
+                "model_id": payload["model_id"],
+                "summary": payload["summary"],
+                "outputs": payload["outputs"],
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def cmd_pruning_candidates(
+    plan: str,
+    output: str,
+    max_candidates: int,
+    prune_threshold: float,
+    aggressive_threshold: float,
+) -> int:
+    payload = write_pruning_candidates(
+        PruningCandidateOptions(
+            plan_path=Path(plan),
+            output_dir=Path(output),
+            max_candidates=max_candidates,
+            prune_threshold=prune_threshold,
+            aggressive_threshold=aggressive_threshold,
+        )
+    )
+    print(
+        json.dumps(
+            {
+                "schema": payload["schema"],
+                "model_id": payload["model_id"],
+                "profile": payload["profile"],
+                "summary": payload["summary"],
+                "outputs": payload["outputs"],
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def cmd_allocation_ui(plan: str, output: str, title: str, metrics: str | None) -> int:
+    payload = write_allocation_ui(
+        AllocationUIOptions(
+            plan_path=Path(plan),
+            output_dir=Path(output),
+            title=title,
+            metrics_path=Path(metrics) if metrics else None,
+        )
+    )
+    print(
+        json.dumps(
+            {
+                "schema": payload["schema"],
+                "model_id": payload["model_id"],
+                "profile": payload["profile"],
+                "summary": payload["summary"],
+                "outputs": payload["outputs"],
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def cmd_prepare_hf_gguf(
     gguf: str,
     output: str,
@@ -652,6 +769,27 @@ def main() -> int:
             args.vision_only,
             args.no_converter_mapping,
         )
+    if args.command == "kv-cache-plan":
+        return cmd_kv_cache_plan(
+            args.output,
+            args.model_id,
+            args.num_layers,
+            args.default_dtype,
+            args.promote_dtype,
+            args.edge_layers,
+            args.periodic_stride,
+            args.weight_plan,
+        )
+    if args.command == "pruning-candidates":
+        return cmd_pruning_candidates(
+            args.plan,
+            args.output,
+            args.max_candidates,
+            args.prune_threshold,
+            args.aggressive_threshold,
+        )
+    if args.command == "allocation-ui":
+        return cmd_allocation_ui(args.plan, args.output, args.title, args.metrics)
     if args.command == "prepare-hf-gguf":
         return cmd_prepare_hf_gguf(
             args.gguf,

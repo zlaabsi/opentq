@@ -32,15 +32,23 @@ subject to quality_delta <= threshold
 actions in {keep, quantize, prune}
 ```
 
-## First Milestone
+## Current Interface
 
-Do not prune public models yet. Build an offline experiment harness:
+Do not prune public models yet. OpenTQ now exposes an offline experiment harness:
+
+```bash
+uv run opentq pruning-candidates \
+  --plan artifacts/qwen36-otq-dyn-q4/plan.json \
+  --output artifacts/qwen36-pruning-candidates
+```
 
 | Artifact | Purpose |
 | --- | --- |
 | `pruning-candidates.jsonl` | Ranked structured units with saliency and quantization error. |
 | `pruning-policy.yaml` | Human-editable keep/quantize/prune decisions. |
 | `paired-pruning-report.md` | Quality and runtime deltas against no-prune baseline. |
+
+The first implementation ranks candidates from allocation evidence and tensor role heuristics. It does not rewrite weights. Any public pruned artifact needs paired quality and runtime validation against the non-pruned baseline.
 
 ## Required Evidence Before Release
 

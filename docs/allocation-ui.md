@@ -1,4 +1,4 @@
-# Allocation UI Roadmap
+# Allocation UI
 
 The OpenTQ allocation policy is the differentiator. YAML policies and TSV files are precise, but they are not enough for users who want to understand why a tensor family receives `Q3_K`, `Q6_K`, `Q8_0`, or `F16`.
 
@@ -51,19 +51,20 @@ measured proxy: lower error tolerance than bulk MLP
 
 When empirical metrics exist, show them. When they do not, label the reason as policy heuristic rather than measured sensitivity.
 
-## Implementation Shape
+## Current Interface
 
-Start with a static artifact that can be opened locally from a generated run directory. Then promote it to a React/Vite app once the data contract is stable:
+Generate a static artifact that can be opened locally from a generated run directory:
 
 ```bash
 uv run opentq dynamic-gguf-plan \
   --policy-file policies/qwen36-custom-dyn-q4.yaml \
   --output artifacts/my-policy
 
-# Future:
 uv run opentq allocation-ui \
   --plan artifacts/my-policy/plan.json \
-  --open
+  --output artifacts/my-policy-ui
 ```
+
+Open `artifacts/my-policy-ui/index.html` to inspect the tensor treemap. The repository also includes a React/Vite dashboard source in `ui/allocation-dashboard` for the first-class UI track.
 
 The release rule is the same as the model card rule: the UI can show policy evidence immediately, but claims about quality impact require paired validation.

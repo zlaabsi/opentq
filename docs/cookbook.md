@@ -186,3 +186,67 @@ LLAMA_CPP_DIR=/path/to/llama.cpp ./scripts/run_qwen36_otq_eval.sh
 ```
 
 OpenTQ keeps the runtime evidence, benchmark summaries, tensor maps, and allocation plots alongside the model card so public claims can be traced back to files.
+
+## 8. Plan KV Cache Precision By Layer
+
+Weight allocation and KV-cache allocation are complementary. Once you have a `plan.json`, generate a runtime-facing KV policy:
+
+```bash
+uv run opentq kv-cache-plan \
+  --weight-plan artifacts/qwen36-my-dyn-q4/plan.json \
+  --output artifacts/qwen36-my-dyn-q4-kv \
+  --default-dtype fp8_e4m3 \
+  --promote-dtype bf16 \
+  --edge-layers 2 \
+  --periodic-stride 8
+```
+
+Outputs:
+
+| File | Purpose |
+| --- | --- |
+| `kv-cache-policy.json` | machine-readable per-layer key/value dtype plan |
+| `kv-cache-policy.tsv` | compact layer table for review |
+| `kv-cache-rationale.md` | release-boundary explanation and runtime handoff notes |
+
+This is the bridge toward mixed-precision KV cache runtime support. Treat it as a policy artifact until paired long-context runtime validation passes.
+
+## 9. Rank Quantization-Aware Pruning Candidates
+
+OpenTQ can rank structured units where pruning may be preferable to spending bits on very low-sensitivity components:
+
+```bash
+uv run opentq pruning-candidates \
+  --plan artifacts/qwen36-my-dyn-q4/plan.json \
+  --output artifacts/qwen36-my-dyn-q4-pruning
+```
+
+Outputs:
+
+| File | Purpose |
+| --- | --- |
+| `pruning-candidates.json` | full ranked candidate payload |
+| `pruning-candidates.jsonl` | streaming-friendly candidate rows |
+| `pruning-policy.yaml` | editable keep/quantize/prune draft |
+| `paired-pruning-report.md` | human-readable candidate report |
+
+The current command does not modify model weights. It creates a reversible experiment plan that must be validated before any pruned artifact is published.
+
+## 10. Open The Allocation Dashboard
+
+Generate a browseable tensor allocation dashboard from any dynamic GGUF plan:
+
+```bash
+uv run opentq allocation-ui \
+  --plan artifacts/qwen36-my-dyn-q4/plan.json \
+  --output artifacts/qwen36-my-dyn-q4-ui \
+  --title "Qwen3.6-27B OpenTQ Allocation"
+```
+
+Then open:
+
+```bash
+open artifacts/qwen36-my-dyn-q4-ui/index.html
+```
+
+The generated dashboard lets you filter by tensor family, tensor type, layer, and tensor name. The repo also includes a React/Vite source app under `ui/allocation-dashboard` for the first-class dashboard track.

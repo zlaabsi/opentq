@@ -66,8 +66,11 @@ The current flagship public artifact is the stock-compatible [`Qwen3.6-27B-OTQ-G
 | Generate a stock-compatible plan | `uv run opentq dynamic-gguf-plan --profile OTQ-DYN-Q4_K_M ...` | `plan.json`, `tensor-types.txt`, annotated tensor map, runnable `quantize.sh` |
 | Use a custom allocation policy | `uv run opentq dynamic-gguf-plan --policy-file policies/qwen36-custom-dyn-q4.yaml ...` | define where precision is spent without editing OpenTQ source |
 | Watch a long run | `uv run opentq monitor --root artifacts/qwen3.6-27b --watch` | terminal dashboard for active profile, tensor, category progress, and release state |
+| Plan KV-cache precision | `uv run opentq kv-cache-plan --weight-plan artifacts/.../plan.json --output artifacts/kv-policy` | per-layer FP8/BF16-style runtime policy coupled to the weight allocation |
+| Rank pruning candidates | `uv run opentq pruning-candidates --plan artifacts/.../plan.json --output artifacts/pruning` | reversible offline keep/quantize/prune candidates for structured-unit experiments |
+| Launch allocation dashboard | `uv run opentq allocation-ui --plan artifacts/.../plan.json --output artifacts/allocation-ui` | local tensor treemap and React/Vite dashboard data for all mapped tensors |
 | Read the full guide | [`docs/cookbook.md`](docs/cookbook.md) | end-to-end examples for profiles, policies, monitoring, validation, and release evidence |
-| Inspect future UI direction | [`docs/allocation-ui.md`](docs/allocation-ui.md) | tensor treemap, layer/family filters, error overlays, and policy diff design |
+| Inspect UI direction | [`docs/allocation-ui.md`](docs/allocation-ui.md) | tensor treemap, layer/family filters, error overlays, and policy diff design |
 
 OpenTQ's stock-compatible path supports custom **allocation** policies, not arbitrary new GGUF kernels. You can choose which tensor families use `F16`, `Q3_K`, `Q4_K`, `Q5_K`, `Q6_K`, `Q8_0`, etc.; the resulting GGUF still relies on tensor types supported by `llama.cpp`.
 
@@ -228,6 +231,26 @@ uv run python scripts/build_qwen36_release_report.py
 OpenTQ separates stock-compatible GGUF releases from native runtime research. The public Qwen3.6-27B OTQ GGUF release uses standard `llama.cpp` tensor types and requires no custom OpenTQ runtime. Native packed payloads and custom Metal/runtime work are separate research tracks.
 
 Practical mini-subsets are reported as quantization-regression signals for the released artifacts. They are not replacements for official full-harness benchmark results.
+
+## Research Runtime Tools
+
+OpenTQ now has three first-class research artifacts that extend the stock GGUF allocation work without mixing their claims into the GGUF release:
+
+```bash
+uv run opentq kv-cache-plan \
+  --weight-plan artifacts/qwen36-otq-dyn-q4/plan.json \
+  --output artifacts/qwen36-kv-cache-policy
+
+uv run opentq pruning-candidates \
+  --plan artifacts/qwen36-otq-dyn-q4/plan.json \
+  --output artifacts/qwen36-pruning-candidates
+
+uv run opentq allocation-ui \
+  --plan artifacts/qwen36-otq-dyn-q4/plan.json \
+  --output artifacts/qwen36-allocation-ui
+```
+
+`kv-cache-plan` emits a per-layer mixed-precision runtime policy, `pruning-candidates` ranks reversible structured-unit actions, and `allocation-ui` produces an inspectable 851-tensor dashboard artifact. These are research/runtime decision tools; release claims still require paired validation.
 
 ## Further Reading
 

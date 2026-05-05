@@ -1,6 +1,6 @@
-# KV Cache Layer Policy Roadmap
+# KV Cache Layer Policy
 
-OpenTQ currently optimizes **weights** by tensor family. The next complementary axis is the KV cache: optimize **runtime state** by layer.
+OpenTQ optimizes **weights** by tensor family. The complementary axis is the KV cache: optimize **runtime state** by layer.
 
 ## Why This Matters
 
@@ -23,9 +23,19 @@ kv_cache:
     linear_attention_state: bf16
 ```
 
-## First Milestone
+## Current Interface
 
-Add a planner-only KV policy artifact:
+Generate a planner/runtime handoff artifact from any dynamic GGUF `plan.json`:
+
+```bash
+uv run opentq kv-cache-plan \
+  --weight-plan artifacts/qwen36-otq-dyn-q4/plan.json \
+  --output artifacts/qwen36-kv-cache-policy \
+  --default-dtype fp8_e4m3 \
+  --promote-dtype bf16
+```
+
+Outputs:
 
 | Output | Purpose |
 | --- | --- |
@@ -33,7 +43,7 @@ Add a planner-only KV policy artifact:
 | `kv-cache-policy.tsv` | Human-readable layer table. |
 | `kv-cache-rationale.md` | Why layers were promoted or compressed. |
 
-This does not require a new runtime yet. It makes policy design explicit and lets later vLLM/llama.cpp/native Metal integrations consume a stable file.
+This makes policy design explicit and gives vLLM/llama.cpp/OpenTQ Metal integrations a stable file to consume. It is not a quality claim until paired long-context validation passes.
 
 ## Runtime Targets
 

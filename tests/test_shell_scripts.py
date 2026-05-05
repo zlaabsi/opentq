@@ -21,6 +21,8 @@ def test_qwen36_release_scripts_are_bash_3_compatible() -> None:
         Path("scripts/run_qwen36_bf16_paired_quality.sh"),
         Path("scripts/launch_qwen36_bf16_paired_quality.sh"),
         Path("scripts/launch_qwen36_hf_bf16_sidecar_smoke.sh"),
+        Path("scripts/run_qwen36_overnight_research_ui.sh"),
+        Path("scripts/launch_qwen36_research_ui_after_overnight.sh"),
     ]
 
     for script in scripts:
